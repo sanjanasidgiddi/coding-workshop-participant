@@ -7,12 +7,6 @@
   margin-bottom: 24px;
 }
 
-.facilities-page__header-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .facilities-page__title {
   margin: 0;
   font-size: 1.5rem;
@@ -40,6 +34,71 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.facilities-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.building-card {
+  padding: 20px;
+  border-top: 3px solid var(--color-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.building-card__name {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+.building-card__stats {
+  display: flex;
+  gap: 24px;
+}
+
+.building-card__stat-value {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  line-height: 1.1;
+}
+
+.building-card__stat-label {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.building-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.facilities-page__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.facilities-page__count {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
 }
 
 .facilities-page__topup-section-title {

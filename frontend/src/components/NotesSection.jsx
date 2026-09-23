@@ -39,7 +39,7 @@ export default function NotesSection({ incidentId, canAddNote }) {
   }
 
   return (
-    <div className="notes-section">
+    <Paper variant="outlined" className="notes-section">
       <p className="notes-section__title">Notes &amp; History</p>
 
       {error && (
@@ -97,7 +97,7 @@ export default function NotesSection({ incidentId, canAddNote }) {
           </Button>
         </form>
       )}
-    </div>
+    </Paper>
   )
 }
 

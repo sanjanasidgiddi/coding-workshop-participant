@@ -41,3 +41,22 @@ export function updateFacility(token, id, payload) {
 export function deleteFacility(token, id) {
   return apiRequest('facilities', `/${id}`, { method: 'DELETE', token })
 }
+
+/** Paginated per-building floor/room counts, for the admin building-card view. */
+export function getFacilitiesSummary(token, { page = 1, page_size } = {}) {
+  return apiRequest('facilities', '/summary', { token, query: { page, page_size } })
+}
+
+/** Renames every facility row for `building` to `newBuilding`. */
+export function renameBuilding(token, building, newBuilding) {
+  return apiRequest('facilities', '/building', {
+    method: 'PUT',
+    body: { building, new_building: newBuilding },
+    token,
+  })
+}
+
+/** Deletes every facility row for `building`. */
+export function deleteBuilding(token, building) {
+  return apiRequest('facilities', '/building', { method: 'DELETE', query: { building }, token })
+}

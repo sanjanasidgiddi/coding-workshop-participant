@@ -23,15 +23,18 @@ from postgres_service import (
     bulk_add_rooms,
     building_has_floor,
     create_facility,
+    delete_building,
     delete_facility,
     get_connection,
     get_facility,
     get_max_floor_number,
     get_max_room_index,
+    list_building_summaries,
     list_buildings,
     list_facilities,
     list_floors,
     list_rooms,
+    rename_building,
     update_facility,
 )
 
@@ -165,6 +168,70 @@ def handle_rooms(conn, event: dict) -> dict:
     return _response(200, {"rooms": list_rooms(conn, building, floor)})
 
 
+_DEFAULT_SUMMARY_PAGE_SIZE = 10
+_MAX_PAGE_SIZE = 100
+
+
+def _parse_page(params: dict, default_page_size: int) -> tuple[int, int]:
+    """Parses page/page_size query params, defaulting page to 1."""
+    page = params.get("page") or "1"
+    page_size = params.get("page_size") or str(default_page_size)
+    try:
+        page = int(page)
+        page_size = int(page_size)
+    except ValueError:
+        raise ValueError("page and page_size must be integers")
+    if page < 1:
+        raise ValueError("page must be >= 1")
+    if page_size < 1 or page_size > _MAX_PAGE_SIZE:
+        raise ValueError(f"page_size must be between 1 and {_MAX_PAGE_SIZE}")
+    return page, page_size
+
+
+def handle_summary(conn, event: dict) -> dict:
+    """GET /facilities/summary?page=&page_size= - paginated per-building floor/room counts (any authenticated user)."""
+    _authenticate(event)
+    params = event.get("queryStringParameters") or {}
+    page, page_size = _parse_page(params, _DEFAULT_SUMMARY_PAGE_SIZE)
+
+    buildings, total = list_building_summaries(conn, page, page_size)
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    return _response(200, {
+        "buildings": buildings,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    })
+
+
+def handle_rename_building(conn, event: dict) -> dict:
+    """PUT /facilities/building - renames every row for one building (FACILITY_ADMIN only)."""
+    require_role(_authenticate(event), "FACILITY_ADMIN")
+
+    data = _parse_body(event)
+    _require_fields(data, "building", "new_building")
+    old_building = data["building"].strip()
+    new_building = data["new_building"].strip()
+    if not new_building:
+        raise ValueError("new_building must not be blank")
+
+    updated_count = rename_building(conn, old_building, new_building)
+    return _response(200, {"building": new_building, "updated_count": updated_count})
+
+
+def handle_delete_building(conn, event: dict) -> dict:
+    """DELETE /facilities/building?building=X - deletes every row for one building (FACILITY_ADMIN only)."""
+    require_role(_authenticate(event), "FACILITY_ADMIN")
+
+    building = _query_param(event, "building")
+    if not building:
+        raise ValueError("Missing required query parameter: building")
+
+    deleted_count = delete_building(conn, building)
+    return _response(200, {"building": building, "deleted_count": deleted_count})
+
+
 def handle_get(conn, event: dict, facility_id: int) -> dict:
     """GET /facilities/{id} - fetches one facility (any authenticated user)."""
     _authenticate(event)
@@ -287,6 +354,9 @@ def handler(event=None, context=None):
         GET    /facilities/buildings          - distinct building names
         GET    /facilities/floors?building=X  - distinct floors in a building
         GET    /facilities/rooms?building=X&floor=Y - rooms in a building/floor
+        GET    /facilities/summary?page=&page_size= - paginated per-building floor/room counts
+        PUT    /facilities/building - rename every row for one building (FACILITY_ADMIN only), body {building, new_building}
+        DELETE /facilities/building?building=X - delete every row for one building (FACILITY_ADMIN only)
         GET    /facilities/{id}    - get a facility
         PUT    /facilities/{id}    - update a facility (FACILITY_ADMIN only)
         DELETE /facilities/{id}    - delete a facility (FACILITY_ADMIN only)
@@ -319,6 +389,12 @@ def handler(event=None, context=None):
             return handle_floors(conn, event)
         if method == "GET" and path == "/rooms":
             return handle_rooms(conn, event)
+        if method == "GET" and path == "/summary":
+            return handle_summary(conn, event)
+        if method == "PUT" and path == "/building":
+            return handle_rename_building(conn, event)
+        if method == "DELETE" and path == "/building":
+            return handle_delete_building(conn, event)
         if method == "GET" and path != "/":
             return handle_get(conn, event, _parse_facility_id(path))
         if method == "PUT" and path != "/":

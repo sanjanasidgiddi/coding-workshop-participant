@@ -45,8 +45,11 @@ def get_connection(config: str):
 def ensure_schema(conn) -> None:
     """Creates the facilities table if it does not already exist.
 
-    Also self-heals environments created before the `seat` -> `room` rename
-    and before `floor` became optional: this repo has no separate migration
+    Also self-heals environments created before the `seat` -> `room` rename,
+    before `floor` became optional, and before building/floor "bare" rows
+    (the `(building, NULL, NULL)` / `(building, floor, NULL)` rows that make
+    "whole building"/"whole floor" itself a selectable facility) were
+    backfilled for pre-existing data: this repo has no separate migration
     tool, so idempotent DDL here is it.
     """
     with conn.cursor() as cur:
@@ -82,6 +85,21 @@ def ensure_schema(conn) -> None:
                         UNIQUE NULLS NOT DISTINCT (building, floor, room);
                 END IF;
             END $$;
+        """)
+        # Backfill bare rows for facilities created before bulk_add_floors/
+        # bulk_add_rooms started ensuring them - without these, older
+        # buildings have no "whole building"/"whole floor" facility for the
+        # employee selector to fall back to, so picking just a building (or
+        # a building + floor) can leave nothing selectable to submit.
+        cur.execute("""
+            INSERT INTO facilities (building, floor, room)
+            SELECT DISTINCT building, NULL, NULL FROM facilities
+            ON CONFLICT (building, floor, room) DO NOTHING;
+        """)
+        cur.execute("""
+            INSERT INTO facilities (building, floor, room)
+            SELECT DISTINCT building, floor, NULL FROM facilities WHERE floor IS NOT NULL
+            ON CONFLICT (building, floor, room) DO NOTHING;
         """)
 
 
@@ -200,6 +218,88 @@ def delete_facility(conn, facility_id: int) -> bool:
     with conn.cursor() as cur:
         cur.execute("DELETE FROM facilities WHERE id = %s;", (facility_id,))
         return cur.rowcount > 0
+
+
+def list_building_summaries(conn, page: int, page_size: int) -> tuple[list, int]:
+    """Aggregates distinct-floor and room counts per building, paginated
+    alphabetically - for the admin building-card view."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(DISTINCT building) FROM facilities;")
+        total = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            SELECT building,
+                   count(DISTINCT floor) FILTER (WHERE floor IS NOT NULL) AS floor_count,
+                   count(*) FILTER (WHERE room IS NOT NULL) AS room_count
+            FROM facilities
+            GROUP BY building
+            ORDER BY building
+            LIMIT %s OFFSET %s;
+            """,
+            (page_size, (page - 1) * page_size),
+        )
+        buildings = [{"building": row[0], "floor_count": row[1], "room_count": row[2]} for row in cur.fetchall()]
+
+    return buildings, total
+
+
+def building_exists(conn, building: str) -> bool:
+    """Whether any facility row exists for this building."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM facilities WHERE building = %s LIMIT 1;", (building,))
+        return cur.fetchone() is not None
+
+
+def count_incidents_for_building(conn, building: str) -> int:
+    """Counts incidents referencing any facility row under `building`.
+
+    This is a raw cross-table query rather than a call into the incidents
+    service - the two are independently deployed Lambdas with no shared
+    code, and there is deliberately no foreign key between their tables
+    (see incidents/postgres_service.py). It exists purely to stop a
+    building delete from leaving incidents with a dangling facility_id.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM incidents WHERE facility_id IN (SELECT id FROM facilities WHERE building = %s);",
+            (building,),
+        )
+        return cur.fetchone()[0]
+
+
+def rename_building(conn, old_building: str, new_building: str) -> int:
+    """Renames every facility row for `old_building` to `new_building` in
+    one atomic UPDATE (floor/room values are untouched). Raises ValueError
+    if `old_building` doesn't exist, or if `new_building` is already a
+    different, existing building (renaming never merges two buildings)."""
+    if not building_exists(conn, old_building):
+        raise ValueError(f"Building '{old_building}' does not exist")
+    if new_building != old_building and building_exists(conn, new_building):
+        raise ValueError(f"A building named '{new_building}' already exists")
+
+    with conn.cursor() as cur:
+        cur.execute("UPDATE facilities SET building = %s WHERE building = %s;", (new_building, old_building))
+        return cur.rowcount
+
+
+def delete_building(conn, building: str) -> int:
+    """Deletes every facility row for `building`. Raises ValueError if the
+    building doesn't exist, or if any incident still references one of its
+    facilities (checked first, so the delete fails cleanly instead of
+    leaving a dangling incidents.facility_id)."""
+    if not building_exists(conn, building):
+        raise ValueError(f"Building '{building}' does not exist")
+
+    incident_count = count_incidents_for_building(conn, building)
+    if incident_count > 0:
+        raise ValueError(
+            f"Cannot delete '{building}': {incident_count} incident(s) still reference its facilities"
+        )
+
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM facilities WHERE building = %s;", (building,))
+        return cur.rowcount
 
 
 def get_max_floor_number(conn, building: str) -> int:

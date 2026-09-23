@@ -1,34 +1,36 @@
 import { createTheme } from '@mui/material/styles'
 
 /**
- * Centralized ACME Inc. theme: an understated, muted mauve palette on a
- * warm off-white background. Mauve is reserved for primary actions, active
- * states, and accents rather than filling every surface.
+ * Centralized ACME Inc. theme: an understated, muted violet-grey mauve
+ * palette on a cool off-white background. Mauve is reserved for primary
+ * actions, active states, and accents rather than filling every surface.
+ * Deliberately kept away from pink/lilac - the hue sits in the violet-grey
+ * range (desaturated, hue ~265-275°) rather than the rose/pink range.
  */
 export const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#8E6C7D',
-      light: '#A98B9A',
-      dark: '#6E4F5E',
+      main: '#6E6479',
+      light: '#8B8296',
+      dark: '#4F4759',
       contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#C9A9A0',
-      light: '#DDC3BC',
-      dark: '#A98277',
-      contrastText: '#2E2A28',
+      main: '#A79CB0',
+      light: '#C2B9C9',
+      dark: '#8A8091',
+      contrastText: '#2B2830',
     },
     background: {
-      default: '#FAF6F4',
+      default: '#F7F5F8',
       paper: '#FFFFFF',
     },
     text: {
-      primary: '#2E2A28',
-      secondary: '#6B615D',
+      primary: '#2B2830',
+      secondary: '#6A6470',
     },
-    divider: '#E6DAD6',
+    divider: '#E1DCE5',
   },
   shape: {
     borderRadius: 8,
@@ -53,8 +55,8 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundColor: '#FFFFFF',
-          color: '#2E2A28',
-          borderBottom: '1px solid #E6DAD6',
+          color: '#2B2830',
+          borderBottom: '1px solid #E1DCE5',
         },
       },
     },
@@ -89,7 +91,7 @@ export const priorityColors = {
 // actual color value rather than an MUI component `color` prop. Keep these
 // in sync with the --color-semantic-* custom properties in theme.css.
 export const semanticColorHex = {
-  default: '#6B615D',
+  default: '#6A6470',
   info: '#0288D1',
   warning: '#ED6C02',
   success: '#2E7D32',

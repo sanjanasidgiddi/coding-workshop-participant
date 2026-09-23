@@ -2,9 +2,10 @@ import PropTypes from 'prop-types'
 import { PieChart } from '@mui/x-charts/PieChart'
 import { BarChart } from '@mui/x-charts/BarChart'
 import { Paper } from '@mui/material'
+import { theme } from '../../theme/theme'
 import './DistributionChart.css'
 
-const NEUTRAL_BAR_COLOR = '#8E6C7D'
+const NEUTRAL_BAR_COLOR = theme.palette.primary.main
 
 /**
  * A single labeled distribution chart, used for status/priority breakdowns

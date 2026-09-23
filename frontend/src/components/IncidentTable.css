@@ -39,44 +39,22 @@
   color: var(--color-text-secondary);
 }
 
-.incident-table__cards {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.incident-table__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
 }
 
-.incident-table__card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.incident-table__card-title {
-  margin: 0;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.incident-table__card-meta {
-  margin: 4px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 0.875rem;
-}
-
-.incident-table__card-footer {
+.incident-table__footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
 }
 
-.incident-table__card-updated {
+.incident-table__count {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
-}
-
-.incident-table__row {
-  cursor: pointer;
+  font-size: 0.875rem;
 }

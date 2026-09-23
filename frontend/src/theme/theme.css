@@ -1,34 +1,35 @@
 /*
- * ACME Inc. mauve palette as CSS custom properties, so component .css
- * files can reference the same tokens as theme.jsx (which still needs
- * these values in JS form for MUI's own internal theming). Keep the two
- * in sync if the palette ever changes.
+ * ACME Inc. violet-grey mauve palette as CSS custom properties, so
+ * component .css files can reference the same tokens as theme.jsx (which
+ * still needs these values in JS form for MUI's own internal theming).
+ * Hue sits in the violet-grey range (~265-275°), deliberately desaturated
+ * away from pink/lilac. Keep the two in sync if the palette ever changes.
  */
 :root {
-  --color-primary: #8e6c7d;
-  --color-primary-light: #a98b9a;
-  --color-primary-dark: #6e4f5e;
+  --color-primary: #6e6479;
+  --color-primary-light: #8b8296;
+  --color-primary-dark: #4f4759;
   --color-primary-contrast: #ffffff;
 
-  --color-secondary: #c9a9a0;
-  --color-secondary-light: #ddc3bc;
-  --color-secondary-dark: #a98277;
-  --color-secondary-contrast: #2e2a28;
+  --color-secondary: #a79cb0;
+  --color-secondary-light: #c2b9c9;
+  --color-secondary-dark: #8a8091;
+  --color-secondary-contrast: #2b2830;
 
-  --color-background-default: #faf6f4;
+  --color-background-default: #f7f5f8;
   --color-background-paper: #ffffff;
 
-  --color-text-primary: #2e2a28;
-  --color-text-secondary: #6b615d;
+  --color-text-primary: #2b2830;
+  --color-text-secondary: #6a6470;
 
-  --color-divider: #e6dad6;
+  --color-divider: #e1dce5;
   --radius-base: 8px;
 
   /* MUI's default semantic palette (mode: light) - not overridden in
      theme.jsx, kept here in sync so status/priority-colored UI in plain
      CSS files (e.g. dashboard stat cards) matches the chips using the
      same statusColors/priorityColors keys. */
-  --color-semantic-default: #6b615d;
+  --color-semantic-default: #6a6470;
   --color-semantic-info: #0288d1;
   --color-semantic-warning: #ed6c02;
   --color-semantic-success: #2e7d32;

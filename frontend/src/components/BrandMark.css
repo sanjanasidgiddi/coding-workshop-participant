@@ -19,11 +19,16 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--radius-base);
-  background-color: var(--color-primary);
+  border-radius: calc(var(--radius-base) + 2px);
+  background: linear-gradient(155deg, var(--color-primary-light) 0%, var(--color-primary) 45%, var(--color-primary-dark) 100%);
   color: var(--color-primary-contrast);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.5px;
+  box-shadow:
+    0 1px 2px rgba(43, 40, 48, 0.18),
+    0 4px 10px rgba(43, 40, 48, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  text-shadow: 0 1px 1px rgba(43, 40, 48, 0.35);
 }
 
 .brand-mark__icon--compact {
@@ -47,6 +52,7 @@
   margin: 0;
   font-weight: 700;
   line-height: 1.15;
+  letter-spacing: 0.01em;
   color: var(--color-text-primary);
 }
 
@@ -61,6 +67,7 @@
 .brand-mark__subtitle {
   margin: 0;
   color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
 }
 
 .brand-mark__subtitle--full {

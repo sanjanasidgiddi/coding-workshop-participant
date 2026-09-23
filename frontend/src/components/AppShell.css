@@ -70,11 +70,20 @@
 }
 
 .app-shell__main {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
   padding: 16px;
 }
 
 @media (min-width: 600px) {
   .app-shell__main {
     padding: 24px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .app-shell__main {
+    padding: 32px;
   }
 }

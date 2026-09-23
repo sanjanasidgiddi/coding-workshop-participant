@@ -8,41 +8,33 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   MenuItem,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
 } from '@mui/material'
-import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { useAuth } from '../../context/AuthContext'
 import { useAsync } from '../../hooks/useAsync'
 import {
   bulkGenerateFacilities,
-  deleteFacility,
-  listFacilities,
-  updateFacility,
+  deleteBuilding,
+  getFacilitiesSummary,
+  listBuildings,
+  listFloors,
+  renameBuilding,
 } from '../../services/facilitiesService'
-import { formatDateTime, formatFacility } from '../../utils/format'
 import './FacilitiesPage.css'
 
 const MAX_FLOORS = 20
 const MAX_ROOMS_PER_FLOOR = 100
+const PAGE_SIZE_STEP = 10
 
-const EMPTY_EDIT_FORM = { building: '', floor: '', room: '' }
 const EMPTY_CREATE_FORM = { building: '', floorCount: '', roomsPerFloor: '' }
-const EMPTY_TOPUP_FORM = { building: '', additionalFloors: '', roomsPerNewFloor: '', floor: '', additionalRooms: '' }
-const EMPTY_FACILITIES = []
-
-function distinctSorted(values) {
-  return [...new Set(values.filter(Boolean))].sort()
-}
+const EMPTY_UPDATE_FORM = { newBuilding: '', additionalFloors: '', roomsPerNewFloor: '', floor: '', additionalRooms: '' }
+const NO_BUILDINGS = { buildings: [] }
+const NO_FLOORS = { floors: [] }
 
 /** Parses a "whole number, 0..max, or blank" form field. Returns null if invalid. */
 function parseCount(value, max) {
@@ -55,13 +47,19 @@ function parseCount(value, max) {
 export default function FacilitiesPage() {
   const { token } = useAuth()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE_STEP)
 
-  const { data, loading, error } = useAsync(() => listFacilities(token), [token, refreshKey])
-  const facilities = useMemo(() => data?.facilities || EMPTY_FACILITIES, [data])
+  const { data, loading, error } = useAsync(
+    () => getFacilitiesSummary(token, { page: 1, page_size: visibleCount }),
+    [token, visibleCount, refreshKey],
+  )
+  const buildings = data?.buildings || []
+  const total = data?.total ?? buildings.length
 
-  const buildingOptions = useMemo(() => distinctSorted(facilities.map((f) => f.building)), [facilities])
+  const { data: buildingsData } = useAsync(() => listBuildings(token), [token, refreshKey])
+  const buildingOptions = buildingsData?.buildings || NO_BUILDINGS.buildings
 
-  // --- Add Facility (bulk create / add more floors+rooms) ---
+  // --- Add Facility (bulk create a brand new building, or top up an existing one) ---
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM)
   const [createError, setCreateError] = useState('')
@@ -109,138 +107,113 @@ export default function FacilitiesPage() {
     }
   }
 
-  // --- Add Floors / Rooms (top up an existing building) ---
-  const [topUpDialogOpen, setTopUpDialogOpen] = useState(false)
-  const [topUpForm, setTopUpForm] = useState(EMPTY_TOPUP_FORM)
-  const [topUpError, setTopUpError] = useState('')
-  const [toppingUp, setToppingUp] = useState(false)
+  // --- Update a building: rename, add more floors, and/or add rooms to an existing floor ---
+  const [updateTarget, setUpdateTarget] = useState(null)
+  const [updateForm, setUpdateForm] = useState(EMPTY_UPDATE_FORM)
+  const [updateError, setUpdateError] = useState('')
+  const [updating, setUpdating] = useState(false)
 
-  const topUpFloorOptions = useMemo(
-    () =>
-      distinctSorted(facilities.filter((f) => f.building === topUpForm.building).map((f) => f.floor)).filter((f) =>
-        /^\d+$/.test(f),
-      ),
-    [facilities, topUpForm.building],
+  const { data: updateFloorsData } = useAsync(
+    () => (updateTarget ? listFloors(token, updateTarget.building) : Promise.resolve(NO_FLOORS)),
+    [token, updateTarget],
+  )
+  const updateFloorOptions = useMemo(
+    () => (updateFloorsData?.floors || []).filter((floor) => /^\d+$/.test(floor)),
+    [updateFloorsData],
   )
 
-  function openTopUpDialog() {
-    setTopUpForm(EMPTY_TOPUP_FORM)
-    setTopUpError('')
-    setTopUpDialogOpen(true)
+  function openUpdateDialog(building) {
+    setUpdateTarget(building)
+    setUpdateForm({ ...EMPTY_UPDATE_FORM, newBuilding: building.building })
+    setUpdateError('')
   }
 
-  async function handleTopUpSubmit(event) {
+  async function handleUpdateSubmit(event) {
     event.preventDefault()
-    setTopUpError('')
+    setUpdateError('')
 
-    const building = topUpForm.building.trim()
-    if (!building) {
-      setTopUpError('Select a building')
+    const currentBuilding = updateTarget.building
+    const newBuilding = updateForm.newBuilding.trim()
+    if (!newBuilding) {
+      setUpdateError('Building name cannot be blank')
       return
     }
+    const isRename = newBuilding !== currentBuilding
 
-    const additionalFloors = parseCount(topUpForm.additionalFloors, MAX_FLOORS)
+    const additionalFloors = parseCount(updateForm.additionalFloors, MAX_FLOORS)
     if (additionalFloors === null) {
-      setTopUpError(`Additional floors must be a whole number from 0 to ${MAX_FLOORS}`)
+      setUpdateError(`Additional floors must be a whole number from 0 to ${MAX_FLOORS}`)
       return
     }
-    const roomsPerNewFloor = parseCount(topUpForm.roomsPerNewFloor, MAX_ROOMS_PER_FLOOR)
+    const roomsPerNewFloor = parseCount(updateForm.roomsPerNewFloor, MAX_ROOMS_PER_FLOOR)
     if (roomsPerNewFloor === null) {
-      setTopUpError(`Rooms per new floor must be a whole number from 0 to ${MAX_ROOMS_PER_FLOOR}`)
+      setUpdateError(`Rooms per new floor must be a whole number from 0 to ${MAX_ROOMS_PER_FLOOR}`)
       return
     }
     if (roomsPerNewFloor > 0 && additionalFloors === 0) {
-      setTopUpError('Rooms per new floor requires at least one additional floor')
+      setUpdateError('Rooms per new floor requires at least one additional floor')
       return
     }
 
-    const additionalRooms = parseCount(topUpForm.additionalRooms, MAX_ROOMS_PER_FLOOR)
+    const additionalRooms = parseCount(updateForm.additionalRooms, MAX_ROOMS_PER_FLOOR)
     if (additionalRooms === null) {
-      setTopUpError(`Additional rooms must be a whole number from 0 to ${MAX_ROOMS_PER_FLOOR}`)
+      setUpdateError(`Additional rooms must be a whole number from 0 to ${MAX_ROOMS_PER_FLOOR}`)
       return
     }
-    if (additionalRooms > 0 && !topUpForm.floor) {
-      setTopUpError('Select a floor to add rooms to')
-      return
-    }
-
-    if (additionalFloors === 0 && additionalRooms === 0) {
-      setTopUpError('Enter a number of floors to add, or a number of rooms to add to a floor')
+    if (additionalRooms > 0 && !updateForm.floor) {
+      setUpdateError('Select a floor to add rooms to')
       return
     }
 
-    setToppingUp(true)
+    if (!isRename && additionalFloors === 0 && additionalRooms === 0) {
+      setUpdateError('Change the name, or enter a number of floors/rooms to add')
+      return
+    }
+
+    setUpdating(true)
     try {
+      // Rename first, since the floor/room top-up calls below must target
+      // whatever the building is named by the time they run.
+      const effectiveBuilding = isRename ? (await renameBuilding(token, currentBuilding, newBuilding)).building : currentBuilding
+
       if (additionalFloors > 0) {
         await bulkGenerateFacilities(token, {
-          building,
+          building: effectiveBuilding,
           floor_count: additionalFloors,
           rooms_per_floor: roomsPerNewFloor,
         })
       }
       if (additionalRooms > 0) {
-        await bulkGenerateFacilities(token, { building, floor: topUpForm.floor, room_count: additionalRooms })
+        await bulkGenerateFacilities(token, {
+          building: effectiveBuilding,
+          floor: updateForm.floor,
+          room_count: additionalRooms,
+        })
       }
-      setTopUpDialogOpen(false)
+
+      setUpdateTarget(null)
       setRefreshKey((key) => key + 1)
     } catch (err) {
-      setTopUpError(err.message || 'Failed to add floors/rooms')
+      setUpdateError(err.message || 'Failed to update building')
     } finally {
-      setToppingUp(false)
+      setUpdating(false)
     }
   }
 
-  // --- Edit / Delete a single existing row (unchanged single-row CRUD) ---
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM)
-  const [editError, setEditError] = useState('')
-  const [saving, setSaving] = useState(false)
-
+  // --- Delete a whole building ---
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
-
-  function openEditDialog(facility) {
-    setEditingId(facility.id)
-    setEditForm({ building: facility.building, floor: facility.floor || '', room: facility.room || '' })
-    setEditError('')
-    setEditDialogOpen(true)
-  }
-
-  function updateEditField(field) {
-    return (event) => setEditForm((prev) => ({ ...prev, [field]: event.target.value }))
-  }
-
-  async function handleEditSubmit(event) {
-    event.preventDefault()
-    setEditError('')
-    setSaving(true)
-    try {
-      const payload = {
-        building: editForm.building,
-        floor: editForm.floor || undefined,
-        room: editForm.room || undefined,
-      }
-      await updateFacility(token, editingId, payload)
-      setEditDialogOpen(false)
-      setRefreshKey((key) => key + 1)
-    } catch (err) {
-      setEditError(err.message || 'Failed to save facility')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function handleDelete() {
     setDeleteError('')
     setDeleting(true)
     try {
-      await deleteFacility(token, deleteTarget.id)
+      await deleteBuilding(token, deleteTarget.building)
       setDeleteTarget(null)
       setRefreshKey((key) => key + 1)
     } catch (err) {
-      setDeleteError(err.message || 'Failed to delete facility')
+      setDeleteError(err.message || 'Failed to delete building')
     } finally {
       setDeleting(false)
     }
@@ -250,14 +223,9 @@ export default function FacilitiesPage() {
     <div>
       <div className="facilities-page__header">
         <p className="facilities-page__title">Facilities</p>
-        <div className="facilities-page__header-actions">
-          <Button variant="outlined" onClick={openTopUpDialog}>
-            Add Floors / Rooms
-          </Button>
-          <Button variant="contained" onClick={openCreateDialog}>
-            Add Facility
-          </Button>
-        </div>
+        <Button variant="contained" onClick={openCreateDialog}>
+          Add Facility
+        </Button>
       </div>
 
       {error && (
@@ -270,42 +238,58 @@ export default function FacilitiesPage() {
         <div className="facilities-page__loading">
           <CircularProgress />
         </div>
-      ) : facilities.length === 0 ? (
+      ) : buildings.length === 0 ? (
         <Paper variant="outlined" className="facilities-page__empty">
           No facilities yet.
         </Paper>
       ) : (
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Building</TableCell>
-                <TableCell>Floor</TableCell>
-                <TableCell>Room</TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {facilities.map((facility) => (
-                <TableRow key={facility.id} hover>
-                  <TableCell>{facility.building}</TableCell>
-                  <TableCell>{facility.floor || '—'}</TableCell>
-                  <TableCell>{facility.room || '—'}</TableCell>
-                  <TableCell>{formatDateTime(facility.created_at)}</TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={() => openEditDialog(facility)} aria-label="Edit facility">
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => setDeleteTarget(facility)} aria-label="Delete facility">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <>
+          <div className="facilities-page__grid">
+            {buildings.map((building) => (
+              <Paper key={building.building} variant="outlined" className="building-card">
+                <p className="building-card__name">{building.building}</p>
+                <div className="building-card__stats">
+                  <div className="building-card__stat">
+                    <p className="building-card__stat-value">{building.floor_count}</p>
+                    <p className="building-card__stat-label">{building.floor_count === 1 ? 'Floor' : 'Floors'}</p>
+                  </div>
+                  <div className="building-card__stat">
+                    <p className="building-card__stat-value">{building.room_count}</p>
+                    <p className="building-card__stat-label">{building.room_count === 1 ? 'Room' : 'Rooms'}</p>
+                  </div>
+                </div>
+                <div className="building-card__actions">
+                  <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => openUpdateDialog(building)}>
+                    Update
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon fontSize="small" />}
+                    onClick={() => setDeleteTarget(building)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </Paper>
+            ))}
+          </div>
+
+          <div className="facilities-page__footer">
+            <p className="facilities-page__count">
+              Showing {buildings.length} of {total} buildings
+            </p>
+            {buildings.length < total && (
+              <Button
+                size="small"
+                endIcon={<KeyboardArrowDownIcon />}
+                onClick={() => setVisibleCount((count) => count + PAGE_SIZE_STEP)}
+              >
+                Show {Math.min(PAGE_SIZE_STEP, total - buildings.length)} more
+              </Button>
+            )}
+          </div>
+        </>
       )}
 
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} fullWidth maxWidth="xs">
@@ -352,16 +336,19 @@ export default function FacilitiesPage() {
         </form>
       </Dialog>
 
-      <Dialog open={topUpDialogOpen} onClose={() => setTopUpDialogOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Add Floors / Rooms</DialogTitle>
-        <form onSubmit={handleTopUpSubmit}>
+      <Dialog open={Boolean(updateTarget)} onClose={() => setUpdateTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Update {updateTarget?.building}</DialogTitle>
+        <form onSubmit={handleUpdateSubmit}>
           <DialogContent className="facilities-page__dialog-content">
-            {topUpError && <Alert severity="error">{topUpError}</Alert>}
-            <Autocomplete
-              options={buildingOptions}
-              value={topUpForm.building || null}
-              onChange={(_, value) => setTopUpForm({ ...EMPTY_TOPUP_FORM, building: value || '' })}
-              renderInput={(params) => <TextField {...params} label="Building" required fullWidth margin="normal" />}
+            {updateError && <Alert severity="error">{updateError}</Alert>}
+            <TextField
+              label="Building Name"
+              fullWidth
+              required
+              margin="normal"
+              value={updateForm.newBuilding}
+              onChange={(e) => setUpdateForm((prev) => ({ ...prev, newBuilding: e.target.value }))}
+              helperText="Renaming updates every floor/room under this building."
             />
 
             <p className="facilities-page__topup-section-title">Add more floors</p>
@@ -370,22 +357,20 @@ export default function FacilitiesPage() {
               type="number"
               fullWidth
               margin="normal"
-              value={topUpForm.additionalFloors}
-              onChange={(e) => setTopUpForm((prev) => ({ ...prev, additionalFloors: e.target.value }))}
+              value={updateForm.additionalFloors}
+              onChange={(e) => setUpdateForm((prev) => ({ ...prev, additionalFloors: e.target.value }))}
               slotProps={{ htmlInput: { min: 0, max: MAX_FLOORS, step: 1 } }}
               helperText={`Optional. Max ${MAX_FLOORS} floors total per building.`}
-              disabled={!topUpForm.building}
             />
             <TextField
               label="Rooms per New Floor"
               type="number"
               fullWidth
               margin="normal"
-              value={topUpForm.roomsPerNewFloor}
-              onChange={(e) => setTopUpForm((prev) => ({ ...prev, roomsPerNewFloor: e.target.value }))}
+              value={updateForm.roomsPerNewFloor}
+              onChange={(e) => setUpdateForm((prev) => ({ ...prev, roomsPerNewFloor: e.target.value }))}
               slotProps={{ htmlInput: { min: 0, max: MAX_ROOMS_PER_FLOOR, step: 1 } }}
               helperText="Optional. Only applies to the new floors above."
-              disabled={!topUpForm.building}
             />
 
             <p className="facilities-page__topup-section-title">Add rooms to an existing floor</p>
@@ -394,12 +379,11 @@ export default function FacilitiesPage() {
               label="Floor"
               fullWidth
               margin="normal"
-              value={topUpForm.floor}
-              onChange={(e) => setTopUpForm((prev) => ({ ...prev, floor: e.target.value }))}
-              disabled={!topUpForm.building}
-              helperText={topUpForm.building && topUpFloorOptions.length === 0 ? 'No numbered floors on this building yet' : ' '}
+              value={updateForm.floor}
+              onChange={(e) => setUpdateForm((prev) => ({ ...prev, floor: e.target.value }))}
+              helperText={updateFloorOptions.length === 0 ? 'No numbered floors on this building yet' : ' '}
             >
-              {topUpFloorOptions.map((floorValue) => (
+              {updateFloorOptions.map((floorValue) => (
                 <MenuItem key={floorValue} value={floorValue}>
                   {floorValue}
                 </MenuItem>
@@ -410,69 +394,31 @@ export default function FacilitiesPage() {
               type="number"
               fullWidth
               margin="normal"
-              value={topUpForm.additionalRooms}
-              onChange={(e) => setTopUpForm((prev) => ({ ...prev, additionalRooms: e.target.value }))}
+              value={updateForm.additionalRooms}
+              onChange={(e) => setUpdateForm((prev) => ({ ...prev, additionalRooms: e.target.value }))}
               slotProps={{ htmlInput: { min: 0, max: MAX_ROOMS_PER_FLOOR, step: 1 } }}
               helperText={`Optional. Max ${MAX_ROOMS_PER_FLOOR} rooms total per floor.`}
-              disabled={!topUpForm.floor}
+              disabled={!updateForm.floor}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setTopUpDialogOpen(false)} disabled={toppingUp}>
+            <Button onClick={() => setUpdateTarget(null)} disabled={updating}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" disabled={toppingUp}>
-              {toppingUp ? 'Adding…' : 'Add'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Edit Facility</DialogTitle>
-        <form onSubmit={handleEditSubmit}>
-          <DialogContent className="facilities-page__dialog-content">
-            {editError && <Alert severity="error">{editError}</Alert>}
-            <TextField
-              label="Building"
-              fullWidth
-              required
-              margin="normal"
-              value={editForm.building}
-              onChange={updateEditField('building')}
-            />
-            <TextField
-              label="Floor (optional)"
-              fullWidth
-              margin="normal"
-              value={editForm.floor}
-              onChange={updateEditField('floor')}
-            />
-            <TextField
-              label="Room (optional)"
-              fullWidth
-              margin="normal"
-              value={editForm.room}
-              onChange={updateEditField('room')}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setEditDialogOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
+            <Button type="submit" variant="contained" disabled={updating}>
+              {updating ? 'Saving…' : 'Save'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
       <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Delete Facility</DialogTitle>
+        <DialogTitle>Delete Building</DialogTitle>
         <DialogContent>
           {deleteError && <Alert severity="error">{deleteError}</Alert>}
           <p>
-            Delete <strong>{formatFacility(deleteTarget)}</strong>? This cannot be undone.
+            Delete <strong>{deleteTarget?.building}</strong> and all {deleteTarget?.floor_count} floor(s) /{' '}
+            {deleteTarget?.room_count} room(s)? This cannot be undone.
           </p>
         </DialogContent>
         <DialogActions>

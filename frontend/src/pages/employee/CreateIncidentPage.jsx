@@ -55,27 +55,33 @@ export default function CreateIncidentPage() {
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} noValidate>
-        <TextField label="Title" fullWidth required margin="normal" value={form.title} onChange={update('title')} />
+      <form onSubmit={handleSubmit} noValidate className="create-incident__form">
+        <TextField
+          label="Title"
+          fullWidth
+          required
+          value={form.title}
+          onChange={update('title')}
+          className="create-incident__field--full"
+        />
         <TextField
           label="Description"
           fullWidth
           multiline
           minRows={3}
-          margin="normal"
           value={form.description}
           onChange={update('description')}
+          className="create-incident__field--full"
         />
         <TextField
           label="Category"
           fullWidth
-          margin="normal"
           value={form.category}
           onChange={update('category')}
           placeholder="e.g. HVAC, Electrical, Plumbing"
         />
 
-        <FormControl fullWidth margin="normal" required>
+        <FormControl fullWidth required>
           <InputLabel id="priority-label">Priority</InputLabel>
           <Select labelId="priority-label" label="Priority" value={form.priority} onChange={update('priority')}>
             {PRIORITY_OPTIONS.map((option) => (
@@ -86,13 +92,15 @@ export default function CreateIncidentPage() {
           </Select>
         </FormControl>
 
-        <FacilitySelector value={form.facility_id} onChange={updateFacilityId} />
+        <div className="create-incident__field--full">
+          <FacilitySelector value={form.facility_id} onChange={updateFacilityId} />
+        </div>
 
         <Button
           type="submit"
           variant="contained"
           size="large"
-          className="create-incident__submit"
+          className="create-incident__submit create-incident__field--full"
           disabled={submitting || !form.facility_id}
         >
           {submitting ? 'Submitting…' : 'Submit Incident'}

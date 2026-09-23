@@ -124,54 +124,56 @@ export default function FacilitySelector({ value = '', onChange, disabled = fals
         </Alert>
       )}
 
-      <FormControl fullWidth margin="normal" required disabled={disabled || buildingsLoading}>
-        <InputLabel id="facility-building-label">Building</InputLabel>
-        <Select labelId="facility-building-label" label="Building" value={building} onChange={handleBuildingChange}>
-          {buildings.map((name) => (
-            <MenuItem key={name} value={name}>
-              {name}
-            </MenuItem>
-          ))}
-        </Select>
-        {buildingsLoading && <FormHelperText>Loading buildings…</FormHelperText>}
-        {!buildingsLoading && buildings.length === 0 && <FormHelperText>No buildings available</FormHelperText>}
-      </FormControl>
+      <div className="facility-selector__row">
+        <FormControl fullWidth required disabled={disabled || buildingsLoading}>
+          <InputLabel id="facility-building-label">Building</InputLabel>
+          <Select labelId="facility-building-label" label="Building" value={building} onChange={handleBuildingChange}>
+            {buildings.map((name) => (
+              <MenuItem key={name} value={name}>
+                {name}
+              </MenuItem>
+            ))}
+          </Select>
+          {buildingsLoading && <FormHelperText>Loading buildings…</FormHelperText>}
+          {!buildingsLoading && buildings.length === 0 && <FormHelperText>No buildings available</FormHelperText>}
+        </FormControl>
 
-      <FormControl fullWidth margin="normal" disabled={disabled || !building || floorsLoading}>
-        <InputLabel id="facility-floor-label">Floor (optional)</InputLabel>
-        <Select labelId="facility-floor-label" label="Floor (optional)" value={floor} onChange={handleFloorChange}>
-          <MenuItem value="">
-            <em>None</em>
-          </MenuItem>
-          {floors.map((value_) => (
-            <MenuItem key={value_} value={value_}>
-              {value_ === NO_FLOOR_SENTINEL ? 'Whole building' : value_}
-            </MenuItem>
-          ))}
-        </Select>
-        {building && floorsLoading && <FormHelperText>Loading floors…</FormHelperText>}
-        {building && !floorsLoading && floors.length === 0 && <FormHelperText>No floors available</FormHelperText>}
-      </FormControl>
-
-      <FormControl fullWidth margin="normal" disabled={disabled || !floor || roomsLoading}>
-        <InputLabel id="facility-room-label">Room (optional)</InputLabel>
-        <Select labelId="facility-room-label" label="Room (optional)" value={value || ''} onChange={handleRoomChange}>
-          {bareRow ? (
-            <MenuItem value={bareRow.id}>Entire floor</MenuItem>
-          ) : (
+        <FormControl fullWidth disabled={disabled || !building || floorsLoading}>
+          <InputLabel id="facility-floor-label">Floor (optional)</InputLabel>
+          <Select labelId="facility-floor-label" label="Floor (optional)" value={floor} onChange={handleFloorChange}>
             <MenuItem value="">
               <em>None</em>
             </MenuItem>
-          )}
-          {rooms.map((room) => (
-            <MenuItem key={room.id} value={room.id}>
-              {room.room}
-            </MenuItem>
-          ))}
-        </Select>
-        {floor && roomsLoading && <FormHelperText>Loading rooms…</FormHelperText>}
-        {floor && !roomsLoading && rooms.length === 0 && !bareRow && <FormHelperText>No rooms available</FormHelperText>}
-      </FormControl>
+            {floors.map((value_) => (
+              <MenuItem key={value_} value={value_}>
+                {value_ === NO_FLOOR_SENTINEL ? 'Whole building' : value_}
+              </MenuItem>
+            ))}
+          </Select>
+          {building && floorsLoading && <FormHelperText>Loading floors…</FormHelperText>}
+          {building && !floorsLoading && floors.length === 0 && <FormHelperText>No floors available</FormHelperText>}
+        </FormControl>
+
+        <FormControl fullWidth disabled={disabled || !floor || roomsLoading}>
+          <InputLabel id="facility-room-label">Room (optional)</InputLabel>
+          <Select labelId="facility-room-label" label="Room (optional)" value={value || ''} onChange={handleRoomChange}>
+            {bareRow ? (
+              <MenuItem value={bareRow.id}>Entire floor</MenuItem>
+            ) : (
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+            )}
+            {rooms.map((room) => (
+              <MenuItem key={room.id} value={room.id}>
+                {room.room}
+              </MenuItem>
+            ))}
+          </Select>
+          {floor && roomsLoading && <FormHelperText>Loading rooms…</FormHelperText>}
+          {floor && !roomsLoading && rooms.length === 0 && !bareRow && <FormHelperText>No rooms available</FormHelperText>}
+        </FormControl>
+      </div>
     </div>
   )
 }

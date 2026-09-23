@@ -1,40 +1,28 @@
 import { useState } from 'react'
 import PropTypes from 'prop-types'
-import { useMediaQuery } from 'react-responsive'
-import { useNavigate } from 'react-router-dom'
 import {
   Alert,
-  Card,
-  CardActionArea,
-  CardContent,
+  Button,
   CircularProgress,
   FormControl,
   InputLabel,
   MenuItem,
   Paper,
   Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
   TextField,
 } from '@mui/material'
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { useAuth } from '../context/AuthContext'
 import { listIncidents } from '../services/incidentsService'
 import { useFacilities } from '../hooks/useFacilities'
 import { useAsync } from '../hooks/useAsync'
-import StatusChip from './StatusChip'
-import PriorityChip from './PriorityChip'
-import { formatDateTime, formatEnumLabel, formatFacility } from '../utils/format'
+import IncidentCard from './IncidentCard'
+import { formatEnumLabel } from '../utils/format'
 import './IncidentTable.css'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'BLOCKED', 'RESOLVED', 'CLOSED']
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
-const DEFAULT_PAGE_SIZE = 20
+const PAGE_SIZE_STEP = 10
 
 // A stable default: unlike React's old defaultProps (evaluated once), a JS
 // default parameter expression re-runs on every call, so `baseFilters = {}`
@@ -43,32 +31,32 @@ const DEFAULT_PAGE_SIZE = 20
 const EMPTY_FILTERS = {}
 
 /**
- * Reusable incident list: a table on desktop, cards on mobile. Filtering
- * and sorting are sent to the backend as query params rather than applied
- * client-side. `baseFilters` are fixed by the caller (e.g. status=OPEN for
- * "My Open Tickets") and hide the corresponding filter control.
+ * Reusable incident list: a responsive grid of IncidentCards at every
+ * breakpoint. Filtering and sorting are sent to the backend as query params
+ * rather than applied client-side. `baseFilters` are fixed by the caller
+ * (e.g. status=OPEN for "My Open Tickets") and hide the corresponding
+ * filter control.
  */
 export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, emptyMessage = 'No incidents found.' }) {
   const { token } = useAuth()
-  const navigate = useNavigate()
   const { facilityById } = useFacilities()
-  const isMobile = useMediaQuery({ maxWidth: 599 })
 
   const [status, setStatus] = useState('')
   const [priority, setPriority] = useState('')
   const [category, setCategory] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
-  // MUI's TablePagination is 0-indexed; the backend's `page` param is 1-indexed.
-  const [page, setPage] = useState(0)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  // Simple "show N, then expand by 10" list instead of page-by-page
+  // navigation: always fetch the first `visibleCount` rows, growing it on
+  // each "Show 10 more" click.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE_STEP)
 
   const baseKeys = Object.keys(baseFilters)
   const statusLocked = baseKeys.includes('status') || baseKeys.includes('status_ne')
 
-  function resetToFirstPage(setter) {
+  function resetVisibleCount(setter) {
     return (...args) => {
-      setPage(0)
+      setVisibleCount(PAGE_SIZE_STEP)
       setter(...args)
     }
   }
@@ -81,14 +69,15 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
       ...(baseKeys.includes('category') ? {} : { category: category || undefined }),
       sort_by: sortBy,
       order,
-      page: page + 1,
-      page_size: pageSize,
+      page: 1,
+      page_size: visibleCount,
     }
     return listIncidents(token, query)
-  }, [token, baseFilters, status, priority, category, sortBy, order, page, pageSize])
+  }, [token, baseFilters, status, priority, category, sortBy, order, visibleCount])
 
   const incidents = data?.incidents || []
   const total = data?.total ?? incidents.length
+  const hasMore = incidents.length < total
 
   return (
     <div>
@@ -102,7 +91,7 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
               labelId="filter-status-label"
               label="Status"
               value={status}
-              onChange={(e) => resetToFirstPage(setStatus)(e.target.value)}
+              onChange={(e) => resetVisibleCount(setStatus)(e.target.value)}
             >
               <MenuItem value="">All statuses</MenuItem>
               {STATUS_OPTIONS.map((option) => (
@@ -121,7 +110,7 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
               labelId="filter-priority-label"
               label="Priority"
               value={priority}
-              onChange={(e) => resetToFirstPage(setPriority)(e.target.value)}
+              onChange={(e) => resetVisibleCount(setPriority)(e.target.value)}
             >
               <MenuItem value="">All priorities</MenuItem>
               {PRIORITY_OPTIONS.map((option) => (
@@ -138,7 +127,7 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
             size="small"
             label="Category"
             value={category}
-            onChange={(e) => resetToFirstPage(setCategory)(e.target.value)}
+            onChange={(e) => resetVisibleCount(setCategory)(e.target.value)}
             className="incident-table__filter"
           />
         )}
@@ -149,7 +138,7 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
             labelId="filter-sort-label"
             label="Sort by"
             value={sortBy}
-            onChange={(e) => resetToFirstPage(setSortBy)(e.target.value)}
+            onChange={(e) => resetVisibleCount(setSortBy)(e.target.value)}
           >
             <MenuItem value="created_at">Created date</MenuItem>
             <MenuItem value="updated_at">Updated date</MenuItem>
@@ -162,7 +151,7 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
             labelId="filter-order-label"
             label="Order"
             value={order}
-            onChange={(e) => resetToFirstPage(setOrder)(e.target.value)}
+            onChange={(e) => resetVisibleCount(setOrder)(e.target.value)}
           >
             <MenuItem value="desc">Newest first</MenuItem>
             <MenuItem value="asc">Oldest first</MenuItem>
@@ -184,87 +173,29 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
         <Paper variant="outlined" className="incident-table__empty">
           {emptyMessage}
         </Paper>
-      ) : isMobile ? (
-        <div className="incident-table__cards">
+      ) : (
+        <div className="incident-table__grid">
           {incidents.map((incident) => (
-            <Card key={incident.id} variant="outlined">
-              <CardActionArea onClick={() => navigate(`/incidents/${incident.id}`)}>
-                <CardContent>
-                  <div className="incident-table__card-header">
-                    <p className="incident-table__card-title">
-                      #{incident.id} {incident.title}
-                    </p>
-                    <StatusChip status={incident.status} />
-                  </div>
-                  <p className="incident-table__card-meta">
-                    {incident.category || 'Uncategorized'} · {formatFacility(facilityById[incident.facility_id])}
-                  </p>
-                  <div className="incident-table__card-footer">
-                    <PriorityChip priority={incident.priority} />
-                    <p className="incident-table__card-updated">Updated {formatDateTime(incident.updated_at)}</p>
-                  </div>
-                </CardContent>
-              </CardActionArea>
-            </Card>
+            <IncidentCard key={incident.id} incident={incident} facility={facilityById[incident.facility_id]} />
           ))}
         </div>
-      ) : (
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Title</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Priority</TableCell>
-                <TableCell>Facility</TableCell>
-                <TableCell>Assigned Engineer</TableCell>
-                <TableCell>Updated</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {incidents.map((incident) => (
-                <TableRow
-                  key={incident.id}
-                  hover
-                  onClick={() => navigate(`/incidents/${incident.id}`)}
-                  className="incident-table__row"
-                >
-                  <TableCell>{incident.id}</TableCell>
-                  <TableCell>{incident.title}</TableCell>
-                  <TableCell>{incident.category || '—'}</TableCell>
-                  <TableCell>
-                    <StatusChip status={incident.status} />
-                  </TableCell>
-                  <TableCell>
-                    <PriorityChip priority={incident.priority} />
-                  </TableCell>
-                  <TableCell>{formatFacility(facilityById[incident.facility_id])}</TableCell>
-                  <TableCell>
-                    {incident.assigned_engineer_id ? `Engineer #${incident.assigned_engineer_id}` : 'Unassigned'}
-                  </TableCell>
-                  <TableCell>{formatDateTime(incident.updated_at)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
       )}
 
       {!loading && incidents.length > 0 && (
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={pageSize}
-          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
-          onRowsPerPageChange={(e) => {
-            setPageSize(Number(e.target.value))
-            setPage(0)
-          }}
-        />
+        <div className="incident-table__footer">
+          <p className="incident-table__count">
+            Showing {incidents.length} of {total}
+          </p>
+          {hasMore && (
+            <Button
+              size="small"
+              endIcon={<KeyboardArrowDownIcon />}
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE_STEP)}
+            >
+              Show {Math.min(PAGE_SIZE_STEP, total - incidents.length)} more
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )

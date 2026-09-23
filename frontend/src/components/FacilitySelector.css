@@ -2,3 +2,16 @@
   margin-top: 8px;
   margin-bottom: 8px;
 }
+
+.facility-selector__row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (min-width: 640px) {
+  .facility-selector__row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

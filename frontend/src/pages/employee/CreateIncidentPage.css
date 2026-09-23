@@ -1,6 +1,8 @@
 .create-incident {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
   padding: 32px;
-  max-width: 560px;
 }
 
 .create-incident__title {
@@ -14,6 +16,22 @@
   margin-bottom: 16px;
 }
 
+.create-incident__form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 640px) {
+  .create-incident__form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.create-incident__field--full {
+  grid-column: 1 / -1;
+}
+
 .create-incident__submit {
-  margin-top: 24px !important;
+  justify-self: start;
 }

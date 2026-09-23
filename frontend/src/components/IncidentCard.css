@@ -1,0 +1,103 @@
+.incident-card {
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-divider);
+  border-top: 3px solid var(--color-primary);
+  box-shadow: 0 1px 3px rgba(43, 40, 48, 0.08);
+  transition: box-shadow 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.incident-card:hover {
+  box-shadow: 0 6px 16px rgba(43, 40, 48, 0.14);
+  border-color: var(--color-primary-light);
+  transform: translateY(-1px);
+}
+
+.incident-card__action {
+  height: 100%;
+}
+
+.incident-card__action .MuiCardActionArea-focusHighlight {
+  background-color: var(--color-primary);
+}
+
+.incident-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px !important;
+}
+
+.incident-card__chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.incident-card__title {
+  margin: 4px 0 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+.incident-card__category {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.incident-card__meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (min-width: 640px) {
+  .incident-card__meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incident-card__meta-row--full {
+    grid-column: 1 / -1;
+  }
+}
+
+.incident-card__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.incident-card__meta-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.incident-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.incident-card__id {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.incident-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
