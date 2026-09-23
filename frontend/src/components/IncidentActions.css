@@ -1,0 +1,35 @@
+.incident-actions {
+  margin-top: 24px;
+  padding: 24px;
+}
+
+.incident-actions__title {
+  margin: 0 0 16px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.incident-actions__alert {
+  margin-bottom: 16px;
+}
+
+.incident-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.incident-actions__control {
+  min-width: 180px !important;
+}
+
+.incident-actions__blocked-reason {
+  margin-bottom: 16px !important;
+}
+
+.incident-actions__submit {
+  align-self: flex-start;
+}
