@@ -105,6 +105,30 @@ def get_user_by_email(conn, email: str) -> dict | None:
         }
 
 
+def list_engineers(conn) -> list:
+    """Fetches all users with role ENGINEER, for admin-only assignment UI."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, email, role, active, created_at
+            FROM users
+            WHERE role = 'ENGINEER'
+            ORDER BY name;
+            """
+        )
+        return [
+            {
+                "id": row[0],
+                "name": row[1],
+                "email": row[2],
+                "role": row[3],
+                "active": row[4],
+                "created_at": row[5].isoformat(),
+            }
+            for row in cur.fetchall()
+        ]
+
+
 def get_user_by_id(conn, user_id: int) -> dict | None:
     """Fetches a user's public fields by id, or None if not found."""
     with conn.cursor() as cur:

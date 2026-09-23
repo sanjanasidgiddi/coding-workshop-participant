@@ -11,6 +11,9 @@ import AllMyTicketsPage from './pages/employee/AllMyTicketsPage'
 import CreateIncidentPage from './pages/employee/CreateIncidentPage'
 import IncidentDetailPage from './pages/incidents/IncidentDetailPage'
 import MyAssignedTicketsPage from './pages/engineer/MyAssignedTicketsPage'
+import AdminLayout from './pages/admin/AdminLayout'
+import AllIncidentsPage from './pages/admin/AllIncidentsPage'
+import FacilitiesPage from './pages/admin/FacilitiesPage'
 
 export default function App() {
   return (
@@ -35,6 +38,14 @@ export default function App() {
 
             <Route path="/engineer" element={<ProtectedRoute allowedRoles={['ENGINEER']} />}>
               <Route index element={<MyAssignedTicketsPage />} />
+            </Route>
+
+            <Route path="/admin" element={<ProtectedRoute allowedRoles={['FACILITY_ADMIN']} />}>
+              <Route element={<AdminLayout />}>
+                <Route index element={<Navigate to="incidents" replace />} />
+                <Route path="incidents" element={<AllIncidentsPage />} />
+                <Route path="facilities" element={<FacilitiesPage />} />
+              </Route>
             </Route>
           </Route>
         </Route>

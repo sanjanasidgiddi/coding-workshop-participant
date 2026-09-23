@@ -7,13 +7,14 @@ import logging
 import os
 import re
 
-from auth import AuthError, decode_token, get_bearer_token, issue_token
+from auth import AuthError, decode_token, get_bearer_token, issue_token, require_role
 from postgres_service import (
     ALLOWED_ROLES,
     create_user,
     get_connection,
     get_user_by_email,
     get_user_by_id,
+    list_engineers,
 )
 from security import hash_password, verify_password
 
@@ -140,14 +141,22 @@ def handle_me(conn, event: dict) -> dict:
     return _response(200, {"user": user})
 
 
+def handle_engineers(conn, event: dict) -> dict:
+    """GET /engineers - lists all ENGINEER users (FACILITY_ADMIN only)."""
+    claims = decode_token(get_bearer_token(event))
+    require_role(claims, "FACILITY_ADMIN")
+    return _response(200, {"engineers": list_engineers(conn)})
+
+
 def handler(event=None, context=None):
     """
     Users service Lambda entry point.
 
     Routes:
-        POST /register - create a new user
-        POST /login     - authenticate and receive a signed access token
-        GET  /me        - retrieve the currently authenticated user
+        POST /register   - create a new user
+        POST /login       - authenticate and receive a signed access token
+        GET  /me          - retrieve the currently authenticated user
+        GET  /engineers   - list ENGINEER users (FACILITY_ADMIN only)
 
     Args:
         event (dict, optional): The Lambda event.
@@ -171,6 +180,8 @@ def handler(event=None, context=None):
             return handle_login(conn, event)
         if method == "GET" and path == "/me":
             return handle_me(conn, event)
+        if method == "GET" and path == "/engineers":
+            return handle_engineers(conn, event)
 
         return _error(404, f"No route for {method} {path}")
 

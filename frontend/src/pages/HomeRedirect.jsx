@@ -14,5 +14,9 @@ export default function HomeRedirect() {
     return <Navigate to="/engineer" replace />
   }
 
+  if (role === 'FACILITY_ADMIN') {
+    return <Navigate to="/admin" replace />
+  }
+
   return <DashboardHome />
 }

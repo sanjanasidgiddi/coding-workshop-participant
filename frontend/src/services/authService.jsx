@@ -11,3 +11,7 @@ export function loginUser({ email, password }) {
 export function getCurrentUser(token) {
   return apiRequest('users', '/me', { token })
 }
+
+export function listEngineers(token) {
+  return apiRequest('users', '/engineers', { token })
+}

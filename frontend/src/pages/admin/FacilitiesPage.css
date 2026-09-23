@@ -1,0 +1,35 @@
+.facilities-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.facilities-page__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.facilities-page__alert {
+  margin-bottom: 16px;
+}
+
+.facilities-page__loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.facilities-page__empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.facilities-page__dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

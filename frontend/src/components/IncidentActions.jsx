@@ -2,6 +2,8 @@ import { useState } from 'react'
 import PropTypes from 'prop-types'
 import { Alert, Button, FormControl, InputLabel, MenuItem, Paper, Select, TextField } from '@mui/material'
 import { useAuth } from '../context/AuthContext'
+import { useAsync } from '../hooks/useAsync'
+import { listEngineers } from '../services/authService'
 import { updateIncident } from '../services/incidentsService'
 import { formatEnumLabel } from '../utils/format'
 import './IncidentActions.css'
@@ -18,10 +20,17 @@ const ENGINEER_STATUS_OPTIONS = ['IN_PROGRESS', 'BLOCKED', 'RESOLVED']
 export default function IncidentActions({ incident, role, onUpdated }) {
   const { token } = useAuth()
   const [priority, setPriority] = useState(incident.priority)
+  const [engineerId, setEngineerId] = useState(incident.assigned_engineer_id || '')
   const [status, setStatus] = useState('')
   const [blockedReason, setBlockedReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  const { data: engineersData, loading: engineersLoading, error: engineersError } = useAsync(
+    () => (role === 'FACILITY_ADMIN' ? listEngineers(token) : Promise.resolve({ engineers: [] })),
+    [token, role],
+  )
+  const engineers = engineersData?.engineers || []
 
   async function runUpdate(payload) {
     setError('')
@@ -45,6 +54,11 @@ export default function IncidentActions({ incident, role, onUpdated }) {
             {error}
           </Alert>
         )}
+        {engineersError && (
+          <Alert severity="warning" className="incident-actions__alert">
+            Could not load engineers: {engineersError}
+          </Alert>
+        )}
 
         <div className="incident-actions__row">
           <FormControl size="small" className="incident-actions__control">
@@ -62,8 +76,38 @@ export default function IncidentActions({ incident, role, onUpdated }) {
               ))}
             </Select>
           </FormControl>
-          <Button variant="outlined" disabled={submitting || priority === incident.priority} onClick={() => runUpdate({ priority })}>
+          <Button
+            variant="outlined"
+            disabled={submitting || priority === incident.priority}
+            onClick={() => runUpdate({ priority })}
+          >
             Update Priority
+          </Button>
+        </div>
+
+        <div className="incident-actions__row">
+          <FormControl size="small" className="incident-actions__control" disabled={engineersLoading}>
+            <InputLabel id="admin-engineer-label">Assigned Engineer</InputLabel>
+            <Select
+              labelId="admin-engineer-label"
+              label="Assigned Engineer"
+              value={engineerId}
+              onChange={(e) => setEngineerId(e.target.value)}
+            >
+              <MenuItem value="">Unassigned</MenuItem>
+              {engineers.map((engineer) => (
+                <MenuItem key={engineer.id} value={engineer.id}>
+                  {engineer.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant="outlined"
+            disabled={submitting || !engineerId || engineerId === incident.assigned_engineer_id}
+            onClick={() => runUpdate({ assigned_engineer_id: engineerId })}
+          >
+            Assign Engineer
           </Button>
         </div>
 
