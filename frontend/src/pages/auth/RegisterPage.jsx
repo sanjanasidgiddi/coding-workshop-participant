@@ -15,6 +15,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import BrandMark from '../../components/BrandMark'
 import { registerUser } from '../../services/authService'
 import { useAuth } from '../../context/AuthContext'
+import { isValidEmail } from '../../utils/validation'
 import './AuthPage.css'
 
 // Workshop/demo simplicity only: letting anyone self-register as
@@ -33,11 +34,21 @@ export default function RegisterPage() {
   const navigate = useNavigate()
 
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'EMPLOYEE' })
+  const [emailError, setEmailError] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   function update(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }))
+  }
+
+  function handleEmailChange(event) {
+    update('email')(event)
+    if (emailError) setEmailError('')
+  }
+
+  function handleEmailBlur() {
+    setEmailError(form.email && !isValidEmail(form.email) ? 'Email address invalid' : '')
   }
 
   async function handleSubmit(event) {
@@ -85,9 +96,11 @@ export default function RegisterPage() {
             required
             margin="normal"
             value={form.email}
-            onChange={update('email')}
+            onChange={handleEmailChange}
+            onBlur={handleEmailBlur}
+            error={Boolean(emailError)}
             autoComplete="email"
-            helperText="Must be an @acme.inc address"
+            helperText={emailError || 'Must be an @acme.inc address'}
           />
           <TextField
             label="Password"

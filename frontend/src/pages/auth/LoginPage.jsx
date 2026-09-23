@@ -3,6 +3,7 @@ import { Alert, Button, Link as MuiLink, Paper, TextField } from '@mui/material'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import BrandMark from '../../components/BrandMark'
 import { useAuth } from '../../context/AuthContext'
+import { isValidEmail } from '../../utils/validation'
 import './AuthPage.css'
 
 export default function LoginPage() {
@@ -10,9 +11,19 @@ export default function LoginPage() {
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
+  const [emailError, setEmailError] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  function handleEmailChange(event) {
+    setEmail(event.target.value)
+    if (emailError) setEmailError('')
+  }
+
+  function handleEmailBlur() {
+    setEmailError(email && !isValidEmail(email) ? 'Email address invalid' : '')
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -55,7 +66,10 @@ export default function LoginPage() {
             required
             margin="normal"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={handleEmailChange}
+            onBlur={handleEmailBlur}
+            error={Boolean(emailError)}
+            helperText={emailError}
             autoComplete="email"
           />
           <TextField
