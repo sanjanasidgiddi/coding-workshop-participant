@@ -1,0 +1,19 @@
+.create-incident {
+  padding: 32px;
+  max-width: 560px;
+}
+
+.create-incident__title {
+  margin: 0 0 24px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.create-incident__alert {
+  margin-bottom: 16px;
+}
+
+.create-incident__submit {
+  margin-top: 24px !important;
+}

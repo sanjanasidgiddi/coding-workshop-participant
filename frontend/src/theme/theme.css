@@ -1,0 +1,26 @@
+/*
+ * ACME Inc. mauve palette as CSS custom properties, so component .css
+ * files can reference the same tokens as theme.jsx (which still needs
+ * these values in JS form for MUI's own internal theming). Keep the two
+ * in sync if the palette ever changes.
+ */
+:root {
+  --color-primary: #8e6c7d;
+  --color-primary-light: #a98b9a;
+  --color-primary-dark: #6e4f5e;
+  --color-primary-contrast: #ffffff;
+
+  --color-secondary: #c9a9a0;
+  --color-secondary-light: #ddc3bc;
+  --color-secondary-dark: #a98277;
+  --color-secondary-contrast: #2e2a28;
+
+  --color-background-default: #faf6f4;
+  --color-background-paper: #ffffff;
+
+  --color-text-primary: #2e2a28;
+  --color-text-secondary: #6b615d;
+
+  --color-divider: #e6dad6;
+  --radius-base: 8px;
+}

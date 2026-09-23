@@ -1,0 +1,4 @@
+.employee-layout__tabs {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-divider);
+}

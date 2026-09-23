@@ -1,0 +1,17 @@
+.dashboard-home {
+  padding: 32px;
+  max-width: 640px;
+  margin: 32px auto 0;
+}
+
+.dashboard-home__title {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.dashboard-home__message {
+  margin: 0;
+  color: var(--color-text-secondary);
+}

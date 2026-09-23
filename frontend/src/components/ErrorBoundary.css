@@ -1,0 +1,26 @@
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-background-default);
+  padding: 16px;
+}
+
+.error-boundary__card {
+  padding: 32px;
+  max-width: 420px;
+  text-align: center;
+}
+
+.error-boundary__title {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.error-boundary__message {
+  margin: 0 0 24px;
+  color: var(--color-text-secondary);
+}

@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { Alert, Box, Button, Link as MuiLink, Paper, TextField, Typography } from '@mui/material'
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
+import { Alert, Button, Link as MuiLink, Paper, TextField } from '@mui/material'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import BrandMark from '../../components/BrandMark'
 import { useAuth } from '../../context/AuthContext'
+import './AuthPage.css'
 
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -20,7 +20,13 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       await login(email, password)
-      navigate(location.state?.from?.pathname || '/', { replace: true })
+      // Always land on "/" and let HomeRedirect route by role, rather than
+      // returning to a route-router "from" location: that state can be
+      // left over from a *previous* user's session in the same tab (e.g.
+      // one person's expired-session redirect state leaking into the next
+      // person's login) and send someone straight to a ticket that isn't
+      // theirs.
+      navigate('/', { replace: true })
     } catch (err) {
       setError(err.message || 'Login failed')
     } finally {
@@ -29,28 +35,19 @@ export default function LoginPage() {
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'background.default',
-        p: 2,
-      }}
-    >
-      <Paper elevation={0} variant="outlined" sx={{ p: 4, width: '100%', maxWidth: 420 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+    <div className="auth-page">
+      <Paper elevation={0} variant="outlined" className="auth-page__card">
+        <div className="auth-page__brand">
           <BrandMark variant="full" align="center" />
-        </Box>
+        </div>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" className="auth-page__error">
             {error}
           </Alert>
         )}
 
-        <Box component="form" onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit} noValidate>
           <TextField
             label="Email"
             type="email"
@@ -71,18 +68,25 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
-          <Button type="submit" variant="contained" fullWidth size="large" sx={{ mt: 3 }} disabled={submitting}>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            size="large"
+            className="auth-page__submit"
+            disabled={submitting}
+          >
             {submitting ? 'Signing in…' : 'Sign In'}
           </Button>
-        </Box>
+        </form>
 
-        <Typography variant="body2" sx={{ mt: 3, textAlign: 'center', color: 'text.secondary' }}>
+        <p className="auth-page__footer">
           Don&apos;t have an account?{' '}
           <MuiLink component={RouterLink} to="/register">
             Register
           </MuiLink>
-        </Typography>
+        </p>
       </Paper>
-    </Box>
+    </div>
   )
 }

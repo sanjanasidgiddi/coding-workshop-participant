@@ -1,0 +1,67 @@
+.incident-detail__loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.incident-detail {
+  max-width: 720px;
+}
+
+.incident-detail__banner {
+  margin-bottom: 16px;
+}
+
+.incident-detail__card {
+  padding: 32px;
+}
+
+.incident-detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.incident-detail__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.incident-detail__meta {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+}
+
+.incident-detail__chips {
+  display: flex;
+  gap: 8px;
+}
+
+.incident-detail__divider {
+  margin: 24px 0;
+}
+
+.incident-detail__description {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--color-text-primary);
+}
+
+.incident-detail__blocked {
+  margin-top: 24px;
+}
+
+.incident-detail__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.incident-detail__fact {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}

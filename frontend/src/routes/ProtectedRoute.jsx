@@ -1,23 +1,27 @@
 import PropTypes from 'prop-types'
-import { Box, CircularProgress } from '@mui/material'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { CircularProgress } from '@mui/material'
+import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import './ProtectedRoute.css'
 
 /** Gates nested routes behind authentication, and optionally by role. */
-export default function ProtectedRoute({ allowedRoles }) {
+export default function ProtectedRoute({ allowedRoles = null }) {
   const { isAuthenticated, isLoading, role } = useAuth()
-  const location = useLocation()
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <div className="protected-route__loading">
         <CircularProgress color="primary" />
-      </Box>
+      </div>
     )
   }
 
+  // No `state: { from: location }` here on purpose: it previously caused a
+  // real bug where one user's in-flight redirect target leaked into the
+  // *next* user's login on the same tab (see LoginPage - login always goes
+  // to "/" now, so this stale state would go unused anyway).
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />
+    return <Navigate to="/login" replace />
   }
 
   if (allowedRoles && !allowedRoles.includes(role)) {
@@ -29,8 +33,4 @@ export default function ProtectedRoute({ allowedRoles }) {
 
 ProtectedRoute.propTypes = {
   allowedRoles: PropTypes.arrayOf(PropTypes.string),
-}
-
-ProtectedRoute.defaultProps = {
-  allowedRoles: null,
 }

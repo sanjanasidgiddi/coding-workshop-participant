@@ -1,0 +1,65 @@
+.app-shell {
+  min-height: 100vh;
+  background-color: var(--color-background-default);
+}
+
+.app-shell__toolbar {
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.app-shell__user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-shell__user-info {
+  display: none;
+  text-align: right;
+}
+
+@media (min-width: 600px) {
+  .app-shell__user-info {
+    display: block;
+  }
+}
+
+.app-shell__user-name {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+
+.app-shell__user-role {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.app-shell__avatar {
+  width: 32px !important;
+  height: 32px !important;
+  font-size: 14px !important;
+  background-color: var(--color-secondary) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.app-shell__logout {
+  color: var(--color-text-secondary) !important;
+}
+
+.app-shell__main {
+  padding: 16px;
+}
+
+@media (min-width: 600px) {
+  .app-shell__main {
+    padding: 24px;
+  }
+}

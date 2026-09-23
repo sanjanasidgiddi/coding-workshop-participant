@@ -1,0 +1,79 @@
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark--full {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.brand-mark--center {
+  justify-content: center;
+  text-align: center;
+}
+
+.brand-mark__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-base);
+  background-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.brand-mark__icon--compact {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+}
+
+.brand-mark__icon--full {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+}
+
+.brand-mark__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-mark__title {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--color-text-primary);
+}
+
+.brand-mark__title--compact {
+  font-size: 1rem;
+}
+
+.brand-mark__title--full {
+  font-size: 1.5rem;
+}
+
+.brand-mark__subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.brand-mark__subtitle--full {
+  font-size: 0.875rem;
+}
+
+.brand-mark__subtitle--compact {
+  display: none;
+  font-size: 0.75rem;
+}
+
+@media (min-width: 600px) {
+  .brand-mark__subtitle--compact {
+    display: block;
+  }
+}

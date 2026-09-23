@@ -1,5 +1,6 @@
-import { Paper, Typography } from '@mui/material'
+import { Paper } from '@mui/material'
 import { useAuth } from '../context/AuthContext'
+import './DashboardHome.css'
 
 const ROLE_LABELS = {
   EMPLOYEE: 'an Employee',
@@ -15,14 +16,12 @@ export default function DashboardHome() {
   const { user, role } = useAuth()
 
   return (
-    <Paper variant="outlined" sx={{ p: 4, maxWidth: 640, mx: 'auto', mt: 4 }}>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-        Welcome, {user?.name}
-      </Typography>
-      <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+    <Paper variant="outlined" className="dashboard-home">
+      <p className="dashboard-home__title">Welcome, {user?.name}</p>
+      <p className="dashboard-home__message">
         You&apos;re signed in as <strong>{ROLE_LABELS[role] || role}</strong>. The role-specific dashboard is coming
         in a later phase.
-      </Typography>
+      </p>
     </Paper>
   )
 }

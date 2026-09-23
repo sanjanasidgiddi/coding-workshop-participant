@@ -1,8 +1,9 @@
-import { AppBar, Avatar, Box, Button, Stack, Toolbar, Typography } from '@mui/material'
+import { AppBar, Avatar, Button, Toolbar } from '@mui/material'
 import LogoutIcon from '@mui/icons-material/Logout'
 import { Outlet, useNavigate } from 'react-router-dom'
 import BrandMark from './BrandMark'
 import { useAuth } from '../context/AuthContext'
+import './AppShell.css'
 
 const ROLE_LABELS = {
   EMPLOYEE: 'Employee',
@@ -21,31 +22,25 @@ export default function AppShell() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <div className="app-shell">
       <AppBar position="static" elevation={0}>
-        <Toolbar sx={{ justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', py: 1 }}>
+        <Toolbar className="app-shell__toolbar">
           <BrandMark variant="compact" />
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                {user?.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {ROLE_LABELS[role] || role}
-              </Typography>
-            </Box>
-            <Avatar sx={{ bgcolor: 'secondary.main', color: 'text.primary', width: 32, height: 32, fontSize: 14 }}>
-              {user?.name?.charAt(0)?.toUpperCase() || '?'}
-            </Avatar>
-            <Button onClick={handleLogout} startIcon={<LogoutIcon />} size="small" sx={{ color: 'text.secondary' }}>
+          <div className="app-shell__user">
+            <div className="app-shell__user-info">
+              <p className="app-shell__user-name">{user?.name}</p>
+              <p className="app-shell__user-role">{ROLE_LABELS[role] || role}</p>
+            </div>
+            <Avatar className="app-shell__avatar">{user?.name?.charAt(0)?.toUpperCase() || '?'}</Avatar>
+            <Button onClick={handleLogout} startIcon={<LogoutIcon />} size="small" className="app-shell__logout">
               Logout
             </Button>
-          </Stack>
+          </div>
         </Toolbar>
       </AppBar>
-      <Box component="main" sx={{ p: { xs: 2, sm: 3 } }}>
+      <main className="app-shell__main">
         <Outlet />
-      </Box>
-    </Box>
+      </main>
+    </div>
   )
 }

@@ -1,0 +1,37 @@
+/* Shared shell for LoginPage and RegisterPage. */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-background-default);
+  padding: 16px;
+}
+
+.auth-page__card {
+  padding: 32px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-page__brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.auth-page__error {
+  margin-bottom: 16px;
+}
+
+.auth-page__submit {
+  margin-top: 24px !important;
+}
+
+.auth-page__footer {
+  margin: 24px 0 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
