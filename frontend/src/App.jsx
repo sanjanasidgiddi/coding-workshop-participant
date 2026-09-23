@@ -10,6 +10,7 @@ import MyOpenTicketsPage from './pages/employee/MyOpenTicketsPage'
 import AllMyTicketsPage from './pages/employee/AllMyTicketsPage'
 import CreateIncidentPage from './pages/employee/CreateIncidentPage'
 import IncidentDetailPage from './pages/incidents/IncidentDetailPage'
+import MyAssignedTicketsPage from './pages/engineer/MyAssignedTicketsPage'
 
 export default function App() {
   return (
@@ -30,6 +31,10 @@ export default function App() {
                 <Route path="tickets" element={<AllMyTicketsPage />} />
                 <Route path="new" element={<CreateIncidentPage />} />
               </Route>
+            </Route>
+
+            <Route path="/engineer" element={<ProtectedRoute allowedRoles={['ENGINEER']} />}>
+              <Route index element={<MyAssignedTicketsPage />} />
             </Route>
           </Route>
         </Route>

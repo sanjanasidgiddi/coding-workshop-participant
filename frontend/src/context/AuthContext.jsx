@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import { getCurrentUser, loginUser } from '../services/authService'
 import { setUnauthorizedHandler } from '../services/apiClient'
@@ -12,7 +12,15 @@ export function AuthProvider({ children }) {
   // No stored token means there's nothing to restore, so skip 'loading' entirely.
   const [status, setStatus] = useState(() => (localStorage.getItem(TOKEN_STORAGE_KEY) ? 'loading' : 'ready'))
 
+  // Guards the mount-time "restore from stored token" fetch below against
+  // resolving *after* the user has since logged out or logged back in as
+  // someone else. Without this, a slow GET /me response lands late and
+  // silently overwrites whoever is currently signed in with whichever
+  // account's token happened to be in localStorage when the tab loaded.
+  const restoreIsStaleRef = useRef(false)
+
   const clearAuth = useCallback(() => {
+    restoreIsStaleRef.current = true
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     setToken(null)
     setUser(null)
@@ -28,8 +36,12 @@ export function AuthProvider({ children }) {
       return
     }
     getCurrentUser(storedToken)
-      .then(({ user: restoredUser }) => setUser(restoredUser))
-      .catch(() => clearAuth())
+      .then(({ user: restoredUser }) => {
+        if (!restoreIsStaleRef.current) setUser(restoredUser)
+      })
+      .catch(() => {
+        if (!restoreIsStaleRef.current) clearAuth()
+      })
       .finally(() => setStatus('ready'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -39,6 +51,7 @@ export function AuthProvider({ children }) {
   }, [clearAuth])
 
   const login = useCallback(async (email, password) => {
+    restoreIsStaleRef.current = true
     const { access_token: newToken, user: loggedInUser } = await loginUser({ email, password })
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
     setToken(newToken)

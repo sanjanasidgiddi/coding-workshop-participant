@@ -10,5 +10,9 @@ export default function HomeRedirect() {
     return <Navigate to="/employee" replace />
   }
 
+  if (role === 'ENGINEER') {
+    return <Navigate to="/engineer" replace />
+  }
+
   return <DashboardHome />
 }
