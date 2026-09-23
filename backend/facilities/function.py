@@ -1,5 +1,5 @@
 """
-Facilities service: manage building/floor/seat records.
+Facilities service: manage building/floor/room records.
 
 Create, update, and delete are restricted to FACILITY_ADMIN. Read access
 is open to any authenticated user, since employees need to pick a
@@ -19,11 +19,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "dep
 
 from auth import AuthError, decode_token, get_bearer_token, require_role
 from postgres_service import (
+    bulk_add_floors,
+    bulk_add_rooms,
+    building_has_floor,
     create_facility,
     delete_facility,
     get_connection,
     get_facility,
+    get_max_floor_number,
+    get_max_room_index,
+    list_buildings,
     list_facilities,
+    list_floors,
+    list_rooms,
     update_facility,
 )
 
@@ -99,12 +107,17 @@ def _authenticate(event: dict) -> dict:
 
 
 def handle_create(conn, event: dict) -> dict:
-    """POST /facilities - creates a facility (FACILITY_ADMIN only)."""
+    """POST /facilities - creates a facility (FACILITY_ADMIN only). Only building is required; floor and room are optional."""
     require_role(_authenticate(event), "FACILITY_ADMIN")
 
     data = _parse_body(event)
-    _require_fields(data, "building", "floor")
-    facility = create_facility(conn, data["building"].strip(), data["floor"].strip(), (data.get("seat") or "").strip() or None)
+    _require_fields(data, "building")
+    facility = create_facility(
+        conn,
+        data["building"].strip(),
+        (data.get("floor") or "").strip() or None,
+        (data.get("room") or "").strip() or None,
+    )
     return _response(201, {"facility": facility})
 
 
@@ -112,6 +125,44 @@ def handle_list(conn, event: dict) -> dict:
     """GET /facilities - lists all facilities (any authenticated user)."""
     _authenticate(event)
     return _response(200, {"facilities": list_facilities(conn)})
+
+
+def _query_param(event: dict, name: str) -> str:
+    params = event.get("queryStringParameters") or {}
+    return (params.get(name) or "").strip()
+
+
+def handle_buildings(conn, event: dict) -> dict:
+    """GET /facilities/buildings - distinct building names (any authenticated user)."""
+    _authenticate(event)
+    return _response(200, {"buildings": list_buildings(conn)})
+
+
+# Floor is optional on a facility, but a query string can't carry a real
+# `None` - the frontend sends this sentinel for "facilities in this building
+# with no floor set", and we translate it back to NULL here.
+NO_FLOOR_SENTINEL = "__NONE__"
+
+
+def handle_floors(conn, event: dict) -> dict:
+    """GET /facilities/floors?building=X - distinct floors in a building."""
+    _authenticate(event)
+    building = _query_param(event, "building")
+    if not building:
+        raise ValueError("Missing required query parameter: building")
+    floors = [floor if floor is not None else NO_FLOOR_SENTINEL for floor in list_floors(conn, building)]
+    return _response(200, {"floors": floors})
+
+
+def handle_rooms(conn, event: dict) -> dict:
+    """GET /facilities/rooms?building=X&floor=Y - rooms in a building/floor."""
+    _authenticate(event)
+    building = _query_param(event, "building")
+    floor_param = _query_param(event, "floor")
+    if not building or not floor_param:
+        raise ValueError("Missing required query parameter(s): building, floor")
+    floor = None if floor_param == NO_FLOOR_SENTINEL else floor_param
+    return _response(200, {"rooms": list_rooms(conn, building, floor)})
 
 
 def handle_get(conn, event: dict, facility_id: int) -> dict:
@@ -124,15 +175,96 @@ def handle_get(conn, event: dict, facility_id: int) -> dict:
 
 
 def handle_update(conn, event: dict, facility_id: int) -> dict:
-    """PUT /facilities/{id} - updates a facility (FACILITY_ADMIN only)."""
+    """PUT /facilities/{id} - updates a facility (FACILITY_ADMIN only). Only building is required; floor and room are optional."""
     require_role(_authenticate(event), "FACILITY_ADMIN")
 
     data = _parse_body(event)
-    _require_fields(data, "building", "floor")
-    facility = update_facility(conn, facility_id, data["building"].strip(), data["floor"].strip(), (data.get("seat") or "").strip() or None)
+    _require_fields(data, "building")
+    facility = update_facility(
+        conn,
+        facility_id,
+        data["building"].strip(),
+        (data.get("floor") or "").strip() or None,
+        (data.get("room") or "").strip() or None,
+    )
     if not facility:
         return _error(404, "Facility not found")
     return _response(200, {"facility": facility})
+
+
+_MAX_FLOORS_PER_BUILDING = 20
+_MAX_ROOMS_PER_FLOOR = 100
+
+
+def _nonneg_int(data: dict, field: str, max_value: int) -> int:
+    """Parses an optional whole-number field (0 if absent/blank), rejecting floats, bools, and out-of-range values."""
+    if field not in data or data[field] in (None, ""):
+        return 0
+    value = data[field]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field} must be a whole number")
+    if value < 0 or value > max_value:
+        raise ValueError(f"{field} must be between 0 and {max_value}")
+    return value
+
+
+def handle_bulk(conn, event: dict) -> dict:
+    """
+    POST /facilities/bulk - bulk-generates floor/room rows for a building
+    (FACILITY_ADMIN only). Two mutually exclusive modes:
+
+    - {"building": "...", "floor_count": N, "rooms_per_floor": M}
+      Adds N new floors after the building's current highest floor, each
+      optionally with M rooms. Works for a brand new building too (floors
+      start at 1) and for adding more floors to an existing one.
+
+    - {"building": "...", "floor": "3", "room_count": M}
+      Adds M new rooms to an existing floor, after its current highest room.
+    """
+    require_role(_authenticate(event), "FACILITY_ADMIN")
+
+    data = _parse_body(event)
+    _require_fields(data, "building")
+    building = data["building"].strip()
+    if not building:
+        raise ValueError("building must not be blank")
+
+    if data.get("floor") not in (None, ""):
+        if data.get("floor_count") not in (None, "") or data.get("rooms_per_floor") not in (None, ""):
+            raise ValueError("Cannot combine 'floor' with 'floor_count'/'rooms_per_floor'")
+
+        floor = str(data["floor"]).strip()
+        if not floor.isdigit() or not (1 <= int(floor) <= _MAX_FLOORS_PER_BUILDING):
+            raise ValueError(f"floor must be a whole number from 1 to {_MAX_FLOORS_PER_BUILDING}")
+        if not building_has_floor(conn, building, floor):
+            raise ValueError(f"Floor {floor} does not exist for building {building} - use floor_count to create it")
+
+        room_count = _nonneg_int(data, "room_count", _MAX_ROOMS_PER_FLOOR)
+        current_max_room = get_max_room_index(conn, building, int(floor))
+        if current_max_room + room_count > _MAX_ROOMS_PER_FLOOR:
+            raise ValueError(f"Adding {room_count} room(s) would exceed the maximum of {_MAX_ROOMS_PER_FLOOR} rooms per floor")
+
+        created = bulk_add_rooms(conn, building, floor, room_count)
+        requested_count = 2 + room_count  # building-level + floor-level bare rows, plus the new rooms
+    else:
+        floor_count = _nonneg_int(data, "floor_count", _MAX_FLOORS_PER_BUILDING)
+        rooms_per_floor = _nonneg_int(data, "rooms_per_floor", _MAX_ROOMS_PER_FLOOR)
+        if rooms_per_floor > 0 and floor_count == 0:
+            raise ValueError("rooms_per_floor requires floor_count to be greater than 0")
+
+        current_max_floor = get_max_floor_number(conn, building)
+        if current_max_floor + floor_count > _MAX_FLOORS_PER_BUILDING:
+            raise ValueError(f"Adding {floor_count} floor(s) would exceed the maximum of {_MAX_FLOORS_PER_BUILDING} floors per building")
+
+        created = bulk_add_floors(conn, building, floor_count, rooms_per_floor)
+        requested_count = 1 + floor_count + (floor_count * rooms_per_floor)  # building row + floor rows + room rows
+
+    return _response(201, {
+        "building": building,
+        "created_count": len(created),
+        "skipped_count": max(requested_count - len(created), 0),
+        "created": created,
+    })
 
 
 def handle_delete(conn, event: dict, facility_id: int) -> dict:
@@ -149,11 +281,15 @@ def handler(event=None, context=None):
     Facilities service Lambda entry point.
 
     Routes:
-        POST   /facilities      - create a facility (FACILITY_ADMIN only)
-        GET    /facilities      - list all facilities
-        GET    /facilities/{id} - get a facility
-        PUT    /facilities/{id} - update a facility (FACILITY_ADMIN only)
-        DELETE /facilities/{id} - delete a facility (FACILITY_ADMIN only)
+        POST   /facilities         - create a facility (FACILITY_ADMIN only)
+        POST   /facilities/bulk    - bulk-generate floor/room rows (FACILITY_ADMIN only)
+        GET    /facilities         - list all facilities
+        GET    /facilities/buildings          - distinct building names
+        GET    /facilities/floors?building=X  - distinct floors in a building
+        GET    /facilities/rooms?building=X&floor=Y - rooms in a building/floor
+        GET    /facilities/{id}    - get a facility
+        PUT    /facilities/{id}    - update a facility (FACILITY_ADMIN only)
+        DELETE /facilities/{id}    - delete a facility (FACILITY_ADMIN only)
 
     Args:
         event (dict, optional): The Lambda event.
@@ -173,8 +309,16 @@ def handler(event=None, context=None):
 
         if method == "POST" and path == "/":
             return handle_create(conn, event)
+        if method == "POST" and path == "/bulk":
+            return handle_bulk(conn, event)
         if method == "GET" and path == "/":
             return handle_list(conn, event)
+        if method == "GET" and path == "/buildings":
+            return handle_buildings(conn, event)
+        if method == "GET" and path == "/floors":
+            return handle_floors(conn, event)
+        if method == "GET" and path == "/rooms":
+            return handle_rooms(conn, event)
         if method == "GET" and path != "/":
             return handle_get(conn, event, _parse_facility_id(path))
         if method == "PUT" and path != "/":

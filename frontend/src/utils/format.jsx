@@ -14,7 +14,8 @@ export function formatDateTime(isoString) {
 
 export function formatFacility(facility) {
   if (!facility) return '—'
-  const parts = [facility.building, `Floor ${facility.floor}`]
-  if (facility.seat) parts.push(`Seat ${facility.seat}`)
+  const parts = [facility.building]
+  if (facility.floor) parts.push(`Floor ${facility.floor}`)
+  if (facility.room) parts.push(`Room ${facility.room}`)
   return parts.join(' · ')
 }

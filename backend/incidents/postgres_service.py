@@ -114,15 +114,8 @@ def get_incident(conn, incident_id: int) -> dict | None:
         return _row_to_dict(row) if row else None
 
 
-def list_incidents(conn, filters: dict, search: str | None, sort_by: str, order: str) -> list:
-    """
-    Lists incidents matching filters, with optional title/description search.
-
-    filters may include: status, priority, assigned_engineer_id, employee_id,
-    facility_id, category. sort_by/order must already be validated by the
-    caller (they're interpolated directly since column/direction names
-    can't be passed as query parameters).
-    """
+def _build_where(filters: dict, search: str | None) -> tuple[str, list]:
+    """Builds a WHERE clause + params from filters/search, shared by list/count/stats."""
     clauses = []
     params = []
     for column in ("status", "priority", "assigned_engineer_id", "employee_id", "facility_id", "category"):
@@ -130,18 +123,105 @@ def list_incidents(conn, filters: dict, search: str | None, sort_by: str, order:
             clauses.append(f"{column} = %s")
             params.append(filters[column])
 
+    if filters.get("status_ne") is not None:
+        clauses.append("status != %s")
+        params.append(filters["status_ne"])
+
     if search:
         clauses.append("(title ILIKE %s OR description ILIKE %s)")
         params.extend([f"%{search}%", f"%{search}%"])
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    return where_sql, params
+
+
+def list_incidents(conn, filters: dict, search: str | None, sort_by: str, order: str,
+                    page: int, page_size: int) -> tuple[list, int]:
+    """
+    Lists one page of incidents matching filters, with optional title/description
+    search, and the total count of matching rows (for pagination metadata).
+
+    filters may include: status, status_ne, priority, assigned_engineer_id,
+    employee_id, facility_id, category. sort_by/order must already be
+    validated by the caller (they're interpolated directly since column/
+    direction names can't be passed as query parameters).
+    """
+    where_sql, params = _build_where(filters, search)
 
     with conn.cursor() as cur:
+        cur.execute(f"SELECT count(*) FROM incidents {where_sql};", params)
+        total = cur.fetchone()[0]
+
         cur.execute(
-            f"SELECT {_COLUMNS} FROM incidents {where_sql} ORDER BY {sort_by} {order};",
+            f"""
+            SELECT {_COLUMNS} FROM incidents {where_sql}
+            ORDER BY {sort_by} {order}
+            LIMIT %s OFFSET %s;
+            """,
+            params + [page_size, (page - 1) * page_size],
+        )
+        items = [_row_to_dict(row) for row in cur.fetchall()]
+
+    return items, total
+
+
+def get_incident_stats(conn, filters: dict) -> dict:
+    """
+    Aggregates incident counts by status/priority/category/facility-building
+    for the given (role-scoped) filters, entirely in SQL.
+    """
+    where_sql, params = _build_where(filters, None)
+
+    with conn.cursor() as cur:
+        status_filters = " ".join(
+            f"count(*) FILTER (WHERE status = '{status}') AS status_{status.lower()},"
+            for status in ALLOWED_STATUSES
+        )
+        priority_filters = ", ".join(
+            f"count(*) FILTER (WHERE priority = '{priority}') AS priority_{priority.lower()}"
+            for priority in ALLOWED_PRIORITIES
+        )
+        cur.execute(
+            f"""
+            SELECT count(*) AS total, {status_filters} {priority_filters}
+            FROM incidents {where_sql};
+            """,
             params,
         )
-        return [_row_to_dict(row) for row in cur.fetchall()]
+        columns = [desc.name for desc in cur.description]
+        totals = dict(zip(columns, cur.fetchone()))
+
+        cur.execute(
+            f"""
+            SELECT category, count(*) AS count
+            FROM incidents {where_sql} {"AND" if where_sql else "WHERE"} category IS NOT NULL
+            GROUP BY category
+            ORDER BY count DESC;
+            """,
+            params,
+        )
+        by_category = [{"category": row[0], "count": row[1]} for row in cur.fetchall()]
+
+        cur.execute(
+            f"""
+            SELECT f.building, count(*) AS count
+            FROM incidents i
+            JOIN facilities f ON f.id = i.facility_id
+            {where_sql} {"AND" if where_sql else "WHERE"} i.facility_id IS NOT NULL
+            GROUP BY f.building
+            ORDER BY count DESC;
+            """,
+            params,
+        )
+        by_facility = [{"building": row[0], "count": row[1]} for row in cur.fetchall()]
+
+    return {
+        "total": totals["total"],
+        "by_status": {status: totals[f"status_{status.lower()}"] for status in ALLOWED_STATUSES},
+        "by_priority": {priority: totals[f"priority_{priority.lower()}"] for priority in ALLOWED_PRIORITIES},
+        "by_category": by_category,
+        "by_facility": by_facility,
+    }
 
 
 def update_incident(conn, incident_id: int, fields: dict) -> dict | None:

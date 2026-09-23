@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import './EmployeeLayout.css'
 
 const TABS = [
+  { value: '/employee/dashboard', label: 'Dashboard' },
   { value: '/employee/open', label: 'My Open Tickets' },
   { value: '/employee/tickets', label: 'All My Tickets' },
   { value: '/employee/new', label: 'Create Incident' },

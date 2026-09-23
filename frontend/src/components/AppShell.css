@@ -17,6 +17,21 @@
   gap: 16px;
 }
 
+.app-shell__home-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-base);
+  padding: 4px 8px;
+  margin: -4px -8px;
+}
+
+.app-shell__home-link:hover {
+  background-color: var(--color-background-default);
+}
+
 .app-shell__user-info {
   display: none;
   text-align: right;

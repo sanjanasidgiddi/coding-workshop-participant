@@ -1,0 +1,36 @@
+.stat-card {
+  padding: 16px 20px;
+  border-top: 3px solid var(--color-divider);
+  min-width: 140px;
+  flex: 1 1 140px;
+}
+
+.stat-card__value {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.stat-card__label {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.stat-card--info {
+  border-top-color: var(--color-semantic-info);
+}
+
+.stat-card--warning {
+  border-top-color: var(--color-semantic-warning);
+}
+
+.stat-card--success {
+  border-top-color: var(--color-semantic-success);
+}
+
+.stat-card--error {
+  border-top-color: var(--color-semantic-error);
+}

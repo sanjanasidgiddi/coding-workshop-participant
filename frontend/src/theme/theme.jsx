@@ -83,3 +83,15 @@ export const priorityColors = {
   HIGH: 'warning',
   CRITICAL: 'error',
 }
+
+// Hex equivalents of the semantic keys above (MUI's default light-mode
+// palette, not overridden in this theme), for chart libraries that need an
+// actual color value rather than an MUI component `color` prop. Keep these
+// in sync with the --color-semantic-* custom properties in theme.css.
+export const semanticColorHex = {
+  default: '#6B615D',
+  info: '#0288D1',
+  warning: '#ED6C02',
+  success: '#2E7D32',
+  error: '#D32F2F',
+}

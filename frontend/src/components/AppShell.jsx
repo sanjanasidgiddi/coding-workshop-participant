@@ -1,6 +1,6 @@
 import { AppBar, Avatar, Button, Toolbar } from '@mui/material'
 import LogoutIcon from '@mui/icons-material/Logout'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, Outlet, useNavigate } from 'react-router-dom'
 import BrandMark from './BrandMark'
 import { useAuth } from '../context/AuthContext'
 import './AppShell.css'
@@ -27,11 +27,13 @@ export default function AppShell() {
         <Toolbar className="app-shell__toolbar">
           <BrandMark variant="compact" />
           <div className="app-shell__user">
-            <div className="app-shell__user-info">
-              <p className="app-shell__user-name">{user?.name}</p>
-              <p className="app-shell__user-role">{ROLE_LABELS[role] || role}</p>
-            </div>
-            <Avatar className="app-shell__avatar">{user?.name?.charAt(0)?.toUpperCase() || '?'}</Avatar>
+            <RouterLink to="/" className="app-shell__home-link" aria-label="Back to dashboard">
+              <div className="app-shell__user-info">
+                <p className="app-shell__user-name">{user?.name}</p>
+                <p className="app-shell__user-role">{ROLE_LABELS[role] || role}</p>
+              </div>
+              <Avatar className="app-shell__avatar">{user?.name?.charAt(0)?.toUpperCase() || '?'}</Avatar>
+            </RouterLink>
             <Button onClick={handleLogout} startIcon={<LogoutIcon />} size="small" className="app-shell__logout">
               Logout
             </Button>

@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { Alert, Button, FormControl, InputLabel, MenuItem, Paper, Select, TextField } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
+import FacilitySelector from '../../components/FacilitySelector'
 import { useAuth } from '../../context/AuthContext'
-import { useFacilities } from '../../hooks/useFacilities'
 import { createIncident } from '../../services/incidentsService'
-import { formatFacility } from '../../utils/format'
 import './CreateIncidentPage.css'
 
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
@@ -12,7 +11,6 @@ const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 export default function CreateIncidentPage() {
   const { token } = useAuth()
   const navigate = useNavigate()
-  const { facilities, loading: facilitiesLoading, error: facilitiesError } = useFacilities()
 
   const [form, setForm] = useState({ title: '', description: '', category: '', priority: 'MEDIUM', facility_id: '' })
   const [error, setError] = useState('')
@@ -20,6 +18,10 @@ export default function CreateIncidentPage() {
 
   function update(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }))
+  }
+
+  function updateFacilityId(facilityId) {
+    setForm((prev) => ({ ...prev, facility_id: facilityId }))
   }
 
   async function handleSubmit(event) {
@@ -50,11 +52,6 @@ export default function CreateIncidentPage() {
       {error && (
         <Alert severity="error" className="create-incident__alert">
           {error}
-        </Alert>
-      )}
-      {facilitiesError && (
-        <Alert severity="warning" className="create-incident__alert">
-          Could not load facilities: {facilitiesError}
         </Alert>
       )}
 
@@ -89,22 +86,7 @@ export default function CreateIncidentPage() {
           </Select>
         </FormControl>
 
-        <FormControl fullWidth margin="normal" required>
-          <InputLabel id="facility-label">Facility</InputLabel>
-          <Select
-            labelId="facility-label"
-            label="Facility"
-            value={form.facility_id}
-            onChange={update('facility_id')}
-            disabled={facilitiesLoading}
-          >
-            {facilities.map((facility) => (
-              <MenuItem key={facility.id} value={facility.id}>
-                {formatFacility(facility)}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <FacilitySelector value={form.facility_id} onChange={updateFacilityId} />
 
         <Button
           type="submit"

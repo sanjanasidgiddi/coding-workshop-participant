@@ -4,6 +4,10 @@ export function listIncidents(token, query = {}) {
   return apiRequest('incidents', '', { token, query })
 }
 
+export function getIncidentStats(token) {
+  return apiRequest('incidents', '/stats', { token })
+}
+
 export function createIncident(token, payload) {
   return apiRequest('incidents', '', { method: 'POST', body: payload, token })
 }

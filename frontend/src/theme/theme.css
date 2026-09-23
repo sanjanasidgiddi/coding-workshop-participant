@@ -23,4 +23,14 @@
 
   --color-divider: #e6dad6;
   --radius-base: 8px;
+
+  /* MUI's default semantic palette (mode: light) - not overridden in
+     theme.jsx, kept here in sync so status/priority-colored UI in plain
+     CSS files (e.g. dashboard stat cards) matches the chips using the
+     same statusColors/priorityColors keys. */
+  --color-semantic-default: #6b615d;
+  --color-semantic-info: #0288d1;
+  --color-semantic-warning: #ed6c02;
+  --color-semantic-success: #2e7d32;
+  --color-semantic-error: #d32f2f;
 }

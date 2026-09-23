@@ -24,6 +24,7 @@ from postgres_service import (
     facility_exists,
     get_connection,
     get_incident,
+    get_incident_stats,
     list_incidents,
     update_incident,
     user_has_role,
@@ -45,6 +46,8 @@ PG_CONFIG = (
 
 _SORTABLE_COLUMNS = ("created_at", "updated_at", "priority")
 _FILTERABLE_INT_COLUMNS = ("assigned_engineer_id", "employee_id", "facility_id")
+_DEFAULT_PAGE_SIZE = 20
+_MAX_PAGE_SIZE = 100
 
 
 def _response(status_code: int, body=None) -> dict:
@@ -153,6 +156,12 @@ def _parse_filters(event: dict, claims: dict) -> dict:
             raise ValueError(f"status must be one of: {', '.join(ALLOWED_STATUSES)}")
         filters["status"] = status
 
+    if params.get("status_ne"):
+        status_ne = params["status_ne"].strip().upper()
+        if status_ne not in ALLOWED_STATUSES:
+            raise ValueError(f"status_ne must be one of: {', '.join(ALLOWED_STATUSES)}")
+        filters["status_ne"] = status_ne
+
     if params.get("priority"):
         priority = params["priority"].strip().upper()
         if priority not in ALLOWED_PRIORITIES:
@@ -162,18 +171,37 @@ def _parse_filters(event: dict, claims: dict) -> dict:
     if params.get("category"):
         filters["category"] = params["category"].strip()
 
-    # Role-based scoping overrides whatever the caller asked for.
+    _apply_role_scope(filters, claims)
+    return filters
+
+
+def _apply_role_scope(filters: dict, claims: dict) -> None:
+    """Restricts `filters` in place to what the caller's role may see."""
     role = claims.get("role")
     if role == "EMPLOYEE":
         filters["employee_id"] = int(claims["sub"])
     elif role == "ENGINEER":
         filters["assigned_engineer_id"] = int(claims["sub"])
 
-    return filters
+
+def _parse_page(params: dict) -> tuple[int, int]:
+    """Parses page/page_size query params, defaulting to page 1 / 20 per page."""
+    page = params.get("page") or "1"
+    page_size = params.get("page_size") or str(_DEFAULT_PAGE_SIZE)
+    try:
+        page = int(page)
+        page_size = int(page_size)
+    except ValueError:
+        raise ValueError("page and page_size must be integers")
+    if page < 1:
+        raise ValueError("page must be >= 1")
+    if page_size < 1 or page_size > _MAX_PAGE_SIZE:
+        raise ValueError(f"page_size must be between 1 and {_MAX_PAGE_SIZE}")
+    return page, page_size
 
 
 def handle_list(conn, event: dict) -> dict:
-    """GET /incidents - lists incidents, filtered/sorted/searched, scoped by role."""
+    """GET /incidents - lists incidents, filtered/sorted/searched/paginated, scoped by role."""
     claims = _authenticate(event)
     params = event.get("queryStringParameters") or {}
 
@@ -188,8 +216,25 @@ def handle_list(conn, event: dict) -> dict:
     if order not in ("asc", "desc"):
         raise ValueError("order must be 'asc' or 'desc'")
 
-    incidents = list_incidents(conn, filters, search, sort_by, order)
-    return _response(200, {"incidents": incidents})
+    page, page_size = _parse_page(params)
+
+    incidents, total = list_incidents(conn, filters, search, sort_by, order, page, page_size)
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    return _response(200, {
+        "incidents": incidents,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    })
+
+
+def handle_stats(conn, event: dict) -> dict:
+    """GET /incidents/stats - role-scoped incident counts, aggregated in SQL."""
+    claims = _authenticate(event)
+    filters = {}
+    _apply_role_scope(filters, claims)
+    return _response(200, get_incident_stats(conn, filters))
 
 
 def _authorize_view(claims: dict, incident: dict) -> None:
@@ -291,10 +336,11 @@ def handler(event=None, context=None):
     Incidents service Lambda entry point.
 
     Routes:
-        POST  /incidents      - create an incident (EMPLOYEE only)
-        GET   /incidents      - list incidents (filter/sort/search, role-scoped)
-        GET   /incidents/{id} - get an incident (role-scoped)
-        PATCH /incidents/{id} - assign engineer / update priority / update status
+        POST  /incidents       - create an incident (EMPLOYEE only)
+        GET   /incidents       - list incidents (filter/sort/search/paginate, role-scoped)
+        GET   /incidents/stats - role-scoped incident counts (status/priority/category/facility)
+        GET   /incidents/{id}  - get an incident (role-scoped)
+        PATCH /incidents/{id}  - assign engineer / update priority / update status
 
     Args:
         event (dict, optional): The Lambda event.
@@ -316,6 +362,8 @@ def handler(event=None, context=None):
             return handle_create(conn, event)
         if method == "GET" and path == "/":
             return handle_list(conn, event)
+        if method == "GET" and path == "/stats":
+            return handle_stats(conn, event)
         if method == "GET" and path != "/":
             return handle_get(conn, event, _parse_incident_id(path))
         if method == "PATCH" and path != "/":

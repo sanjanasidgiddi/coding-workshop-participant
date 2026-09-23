@@ -2,7 +2,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-bottom: 24px;
+}
+
+.facilities-page__header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .facilities-page__title {
@@ -32,4 +40,13 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.facilities-page__topup-section-title {
+  margin: 20px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }

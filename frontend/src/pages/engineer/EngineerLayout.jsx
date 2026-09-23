@@ -1,14 +1,13 @@
 import { Tab, Tabs } from '@mui/material'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import './AdminLayout.css'
+import './EngineerLayout.css'
 
 const TABS = [
-  { value: '/admin/dashboard', label: 'Dashboard' },
-  { value: '/admin/incidents', label: 'All Incidents' },
-  { value: '/admin/facilities', label: 'Facilities' },
+  { value: '/engineer/dashboard', label: 'Dashboard' },
+  { value: '/engineer/assigned', label: 'My Assigned Tickets' },
 ]
 
-export default function AdminLayout() {
+export default function EngineerLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const currentTab = TABS.find((tab) => location.pathname.startsWith(tab.value))?.value || false
@@ -20,7 +19,7 @@ export default function AdminLayout() {
         onChange={(_, value) => navigate(value)}
         textColor="primary"
         indicatorColor="primary"
-        className="admin-layout__tabs"
+        className="engineer-layout__tabs"
       >
         {TABS.map((tab) => (
           <Tab key={tab.value} value={tab.value} label={tab.label} />

@@ -1,0 +1,29 @@
+.dashboard-stats__title {
+  margin: 0 0 16px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.dashboard-stats__loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.dashboard-stats__error {
+  margin-bottom: 16px;
+}
+
+.dashboard-stats__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-stats__charts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}

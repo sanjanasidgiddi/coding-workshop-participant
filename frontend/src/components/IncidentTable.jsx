@@ -18,6 +18,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
 } from '@mui/material'
@@ -32,6 +33,8 @@ import './IncidentTable.css'
 
 const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'BLOCKED', 'RESOLVED', 'CLOSED']
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const DEFAULT_PAGE_SIZE = 20
 
 // A stable default: unlike React's old defaultProps (evaluated once), a JS
 // default parameter expression re-runs on every call, so `baseFilters = {}`
@@ -56,36 +59,50 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
   const [category, setCategory] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
+  // MUI's TablePagination is 0-indexed; the backend's `page` param is 1-indexed.
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const baseKeys = Object.keys(baseFilters)
+  const statusLocked = baseKeys.includes('status') || baseKeys.includes('status_ne')
+
+  function resetToFirstPage(setter) {
+    return (...args) => {
+      setPage(0)
+      setter(...args)
+    }
+  }
 
   const { data, loading, error } = useAsync(() => {
     const query = {
       ...baseFilters,
-      ...(baseKeys.includes('status') ? {} : { status: status || undefined }),
+      ...(statusLocked ? {} : { status: status || undefined }),
       ...(baseKeys.includes('priority') ? {} : { priority: priority || undefined }),
       ...(baseKeys.includes('category') ? {} : { category: category || undefined }),
       sort_by: sortBy,
       order,
+      page: page + 1,
+      page_size: pageSize,
     }
     return listIncidents(token, query)
-  }, [token, baseFilters, status, priority, category, sortBy, order])
+  }, [token, baseFilters, status, priority, category, sortBy, order, page, pageSize])
 
   const incidents = data?.incidents || []
+  const total = data?.total ?? incidents.length
 
   return (
     <div>
       <p className="incident-table__title">{title}</p>
 
       <div className="incident-table__filters">
-        {!baseKeys.includes('status') && (
+        {!statusLocked && (
           <FormControl size="small" className="incident-table__filter">
             <InputLabel id="filter-status-label">Status</InputLabel>
             <Select
               labelId="filter-status-label"
               label="Status"
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(e) => resetToFirstPage(setStatus)(e.target.value)}
             >
               <MenuItem value="">All statuses</MenuItem>
               {STATUS_OPTIONS.map((option) => (
@@ -104,7 +121,7 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
               labelId="filter-priority-label"
               label="Priority"
               value={priority}
-              onChange={(e) => setPriority(e.target.value)}
+              onChange={(e) => resetToFirstPage(setPriority)(e.target.value)}
             >
               <MenuItem value="">All priorities</MenuItem>
               {PRIORITY_OPTIONS.map((option) => (
@@ -121,14 +138,19 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
             size="small"
             label="Category"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => resetToFirstPage(setCategory)(e.target.value)}
             className="incident-table__filter"
           />
         )}
 
         <FormControl size="small" className="incident-table__filter">
           <InputLabel id="filter-sort-label">Sort by</InputLabel>
-          <Select labelId="filter-sort-label" label="Sort by" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <Select
+            labelId="filter-sort-label"
+            label="Sort by"
+            value={sortBy}
+            onChange={(e) => resetToFirstPage(setSortBy)(e.target.value)}
+          >
             <MenuItem value="created_at">Created date</MenuItem>
             <MenuItem value="updated_at">Updated date</MenuItem>
           </Select>
@@ -136,7 +158,12 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
 
         <FormControl size="small" className="incident-table__filter">
           <InputLabel id="filter-order-label">Order</InputLabel>
-          <Select labelId="filter-order-label" label="Order" value={order} onChange={(e) => setOrder(e.target.value)}>
+          <Select
+            labelId="filter-order-label"
+            label="Order"
+            value={order}
+            onChange={(e) => resetToFirstPage(setOrder)(e.target.value)}
+          >
             <MenuItem value="desc">Newest first</MenuItem>
             <MenuItem value="asc">Oldest first</MenuItem>
           </Select>
@@ -223,6 +250,21 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {!loading && incidents.length > 0 && (
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          onPageChange={(_event, newPage) => setPage(newPage)}
+          rowsPerPage={pageSize}
+          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
+          onRowsPerPageChange={(e) => {
+            setPageSize(Number(e.target.value))
+            setPage(0)
+          }}
+        />
       )}
     </div>
   )
