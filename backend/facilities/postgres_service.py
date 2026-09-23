@@ -144,14 +144,21 @@ def list_buildings(conn) -> list:
 
 
 def list_floors(conn, building: str) -> list:
-    """Returns the distinct set of floors within a building."""
+    """Returns the distinct set of floors within a building, sorted
+    numerically (floor is TEXT, so a plain `ORDER BY floor` sorts "10"
+    before "2"). Non-numeric custom floor names sort alphabetically after
+    all numeric floors; the building-level bare row (floor IS NULL) sorts
+    last, same as before."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT DISTINCT floor
-            FROM facilities
-            WHERE building = %s
-            ORDER BY floor;
+            SELECT floor
+            FROM (SELECT DISTINCT floor FROM facilities WHERE building = %s) AS distinct_floors
+            ORDER BY
+                floor IS NULL,
+                floor !~ '^[0-9]+$',
+                (CASE WHEN floor ~ '^[0-9]+$' THEN floor::int END),
+                floor;
             """,
             (building,),
         )
@@ -164,6 +171,9 @@ def list_rooms(conn, building: str, floor: str | None) -> list:
     `floor` may be None to match facilities that don't track a floor at all
     (an ordinary `= NULL` comparison never matches, hence `IS NOT DISTINCT
     FROM` here instead).
+
+    Sorted numerically, same rationale as list_floors: room is TEXT, so a
+    plain `ORDER BY room` would sort "1200" before "13".
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -171,7 +181,11 @@ def list_rooms(conn, building: str, floor: str | None) -> list:
             SELECT id, room
             FROM facilities
             WHERE building = %s AND floor IS NOT DISTINCT FROM %s
-            ORDER BY room;
+            ORDER BY
+                room IS NULL,
+                room !~ '^[0-9]+$',
+                (CASE WHEN room ~ '^[0-9]+$' THEN room::int END),
+                room;
             """,
             (building, floor),
         )
