@@ -7,7 +7,14 @@ status, mark blocked, resolve/close).
 import json
 import logging
 import os
+import sys
 from datetime import datetime, timezone
+
+# LocalStack's hot-reload mounts this service's own folder directly, so its
+# dependencies/ subfolder (pip packages installed by bin/start-dev.sh) must
+# be added to sys.path before importing local modules that need them
+# (auth.py needs PyJWT, postgres_service.py needs psycopg).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "dependencies"))
 
 from auth import AuthError, decode_token, get_bearer_token
 from postgres_service import (

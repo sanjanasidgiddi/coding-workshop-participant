@@ -327,19 +327,21 @@ else
     echo -e "  Detected Mac/Windows - using host: host.docker.internal"
 fi
 
-# Install pip requirements into each Python service directory for hot-reload
+# Install pip requirements into each Python service's dependencies/ folder for hot-reload
 # Skip if requirements.txt hasn't changed since last install (avoids slow PyPI lookups)
 shopt -s nullglob
 for req in "$PROJECT_ROOT"/backend/*/requirements.txt; do
     svc_dir="$(dirname "$req")"
+    deps_dir="$svc_dir/dependencies"
     REQS_HASH=$(md5sum "$req" 2>/dev/null | cut -d' ' -f1)
-    HASH_FILE="$svc_dir/.pip_installed"
+    HASH_FILE="$deps_dir/.pip_installed"
     if [ "$(cat "$HASH_FILE" 2>/dev/null)" = "$REQS_HASH" ]; then
         echo -e "  pip requirements for $(basename "$svc_dir") already up to date, skipping..."
         continue
     fi
     echo -e "  Installing pip requirements for $(basename "$svc_dir")..."
-    pip install --quiet --target="$svc_dir" -r "$req" 2>/dev/null || true
+    mkdir -p "$deps_dir"
+    pip install --quiet --target="$deps_dir" -r "$req" 2>/dev/null || true
     echo "$REQS_HASH" > "$HASH_FILE"
 done
 
