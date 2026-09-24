@@ -1,0 +1,36 @@
+config:
+  target: "http://localhost:3001"
+  phases:
+    - duration: 20
+      arrivalRate: 5
+      name: "warm ramp"
+    - duration: 20
+      arrivalRate: 15
+      name: "peak load"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "Read-heavy endpoints: incidents list, incident stats, facilities summary"
+    flow:
+      - post:
+          url: "/api/users/login"
+          json:
+            email: "perf.loadtest@acme.inc"
+            password: "PerfLoadTest123!"
+          capture:
+            - json: "$.access_token"
+              as: "token"
+      - get:
+          url: "/api/incidents?page=1&page_size=20"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - get:
+          url: "/api/incidents/stats"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - get:
+          url: "/api/facilities/summary?page=1&page_size=10"
+          headers:
+            Authorization: "Bearer {{ token }}"
