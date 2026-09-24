@@ -7,6 +7,7 @@ const TABS = [
   { value: '/admin/incidents', label: 'All Incidents' },
   { value: '/admin/facilities', label: 'Facilities' },
   { value: '/admin/people', label: 'People' },
+  { value: '/admin/create-profile', label: 'Create Profile' },
 ]
 
 export default function AdminLayout() {

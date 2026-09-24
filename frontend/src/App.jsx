@@ -21,6 +21,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AllIncidentsPage from './pages/admin/AllIncidentsPage'
 import FacilitiesPage from './pages/admin/FacilitiesPage'
 import PeoplePage from './pages/admin/PeoplePage'
+import CreateProfilePage from './pages/admin/CreateProfilePage'
 
 export default function App() {
   return (
@@ -61,6 +62,7 @@ export default function App() {
                 <Route path="incidents" element={<AllIncidentsPage />} />
                 <Route path="facilities" element={<FacilitiesPage />} />
                 <Route path="people" element={<PeoplePage />} />
+                <Route path="create-profile" element={<CreateProfilePage />} />
               </Route>
             </Route>
           </Route>

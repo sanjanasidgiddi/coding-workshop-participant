@@ -1,0 +1,19 @@
+.create-profile-page__title {
+  margin: 0 0 24px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.create-profile-page__card {
+  max-width: 480px;
+  padding: 24px;
+}
+
+.create-profile-page__alert {
+  margin-bottom: 16px;
+}
+
+.create-profile-page__submit {
+  margin-top: 8px;
+}
