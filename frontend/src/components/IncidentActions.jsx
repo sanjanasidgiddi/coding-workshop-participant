@@ -136,6 +136,15 @@ export default function IncidentActions({ incident, role, onUpdated }) {
     )
   }
 
+  if (role === 'ENGINEER' && incident.status === 'CLOSED') {
+    return (
+      <Paper variant="outlined" className="incident-actions">
+        <p className="incident-actions__title">Update Status</p>
+        <p className="incident-actions__owner-note">This incident is closed and can no longer be updated.</p>
+      </Paper>
+    )
+  }
+
   if (role === 'ENGINEER') {
     const isBlocked = status === 'BLOCKED'
     return (

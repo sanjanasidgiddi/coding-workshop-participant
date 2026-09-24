@@ -49,4 +49,18 @@ describe('IncidentActions engineer workflow (unaffected by ownership)', () => {
     expect(screen.getByRole('button', { name: 'Update Status' })).toBeInTheDocument()
     expect(screen.queryByText('Managed by another admin')).not.toBeInTheDocument()
   })
+
+  it('hides the status-update controls for a CLOSED incident and shows a read-only note instead', () => {
+    render(
+      <IncidentActions
+        incident={{ ...baseIncident, status: 'CLOSED', assigned_engineer_id: 9, owned_by_me: false }}
+        role="ENGINEER"
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('This incident is closed and can no longer be updated.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Update Status' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
+  })
 })
