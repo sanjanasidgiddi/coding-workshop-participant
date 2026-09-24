@@ -53,9 +53,9 @@
 }
 
 .incident-table__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .incident-table__footer {
