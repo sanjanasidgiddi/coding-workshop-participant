@@ -55,6 +55,11 @@ export default function FacilitiesPage() {
   )
   const buildings = data?.buildings || []
   const total = data?.total ?? buildings.length
+  // Backend already orders owned-by-me first, then alphabetically - this
+  // just splits the one fetched/paginated array into the two sections
+  // rather than re-sorting or re-fetching.
+  const myBuildings = buildings.filter((building) => building.owned_by_me)
+  const generalBuildings = buildings.filter((building) => !building.owned_by_me)
 
   const { data: buildingsData } = useAsync(() => listBuildings(token), [token, refreshKey])
   const buildingOptions = buildingsData?.buildings || NO_BUILDINGS.buildings
@@ -219,6 +224,41 @@ export default function FacilitiesPage() {
     }
   }
 
+  function renderBuildingCard(building) {
+    return (
+      <Paper key={building.building} variant="outlined" className="building-card">
+        <p className="building-card__name">{building.building}</p>
+        <div className="building-card__stats">
+          <div className="building-card__stat">
+            <p className="building-card__stat-value">{building.floor_count}</p>
+            <p className="building-card__stat-label">{building.floor_count === 1 ? 'Floor' : 'Floors'}</p>
+          </div>
+          <div className="building-card__stat">
+            <p className="building-card__stat-value">{building.room_count}</p>
+            <p className="building-card__stat-label">{building.room_count === 1 ? 'Room' : 'Rooms'}</p>
+          </div>
+        </div>
+        {building.owned_by_me ? (
+          <div className="building-card__actions">
+            <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => openUpdateDialog(building)}>
+              Update
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              startIcon={<DeleteIcon fontSize="small" />}
+              onClick={() => setDeleteTarget(building)}
+            >
+              Delete
+            </Button>
+          </div>
+        ) : (
+          <p className="building-card__owner-note">Managed by another admin</p>
+        )}
+      </Paper>
+    )
+  }
+
   return (
     <div>
       <div className="facilities-page__header">
@@ -244,36 +284,19 @@ export default function FacilitiesPage() {
         </Paper>
       ) : (
         <>
-          <div className="facilities-page__grid">
-            {buildings.map((building) => (
-              <Paper key={building.building} variant="outlined" className="building-card">
-                <p className="building-card__name">{building.building}</p>
-                <div className="building-card__stats">
-                  <div className="building-card__stat">
-                    <p className="building-card__stat-value">{building.floor_count}</p>
-                    <p className="building-card__stat-label">{building.floor_count === 1 ? 'Floor' : 'Floors'}</p>
-                  </div>
-                  <div className="building-card__stat">
-                    <p className="building-card__stat-value">{building.room_count}</p>
-                    <p className="building-card__stat-label">{building.room_count === 1 ? 'Room' : 'Rooms'}</p>
-                  </div>
-                </div>
-                <div className="building-card__actions">
-                  <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => openUpdateDialog(building)}>
-                    Update
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<DeleteIcon fontSize="small" />}
-                    onClick={() => setDeleteTarget(building)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </Paper>
-            ))}
-          </div>
+          {myBuildings.length > 0 && (
+            <>
+              <p className="facilities-page__section-title">My Facilities</p>
+              <div className="facilities-page__grid">{myBuildings.map(renderBuildingCard)}</div>
+            </>
+          )}
+
+          {generalBuildings.length > 0 && (
+            <>
+              <p className="facilities-page__section-title">General Facilities</p>
+              <div className="facilities-page__grid">{generalBuildings.map(renderBuildingCard)}</div>
+            </>
+          )}
 
           <div className="facilities-page__footer">
             <p className="facilities-page__count">

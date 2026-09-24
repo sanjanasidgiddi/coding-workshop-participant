@@ -12,6 +12,11 @@ export function getCurrentUser(token) {
   return apiRequest('users', '/me', { token })
 }
 
-export function listEngineers(token) {
-  return apiRequest('users', '/engineers', { token })
+/**
+ * Defaults to ENGINEER only (for the assignment dropdown). Pass e.g.
+ * `['EMPLOYEE', 'ENGINEER']` to widen it - reused by the People directory
+ * instead of a separate endpoint.
+ */
+export function listEngineers(token, roles) {
+  return apiRequest('users', '/engineers', { token, query: { roles: roles?.join(',') } })
 }

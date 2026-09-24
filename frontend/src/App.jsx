@@ -10,14 +10,17 @@ import EmployeeDashboardPage from './pages/employee/EmployeeDashboardPage'
 import MyOpenTicketsPage from './pages/employee/MyOpenTicketsPage'
 import AllMyTicketsPage from './pages/employee/AllMyTicketsPage'
 import CreateIncidentPage from './pages/employee/CreateIncidentPage'
+import EmployeeFacilitiesOverviewPage from './pages/employee/FacilitiesOverviewPage'
 import IncidentDetailPage from './pages/incidents/IncidentDetailPage'
 import EngineerLayout from './pages/engineer/EngineerLayout'
 import EngineerDashboardPage from './pages/engineer/EngineerDashboardPage'
 import MyAssignedTicketsPage from './pages/engineer/MyAssignedTicketsPage'
+import EngineerFacilitiesOverviewPage from './pages/engineer/FacilitiesOverviewPage'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AllIncidentsPage from './pages/admin/AllIncidentsPage'
 import FacilitiesPage from './pages/admin/FacilitiesPage'
+import PeoplePage from './pages/admin/PeoplePage'
 
 export default function App() {
   return (
@@ -38,6 +41,7 @@ export default function App() {
                 <Route path="open" element={<MyOpenTicketsPage />} />
                 <Route path="tickets" element={<AllMyTicketsPage />} />
                 <Route path="new" element={<CreateIncidentPage />} />
+                <Route path="facilities" element={<EmployeeFacilitiesOverviewPage />} />
               </Route>
             </Route>
 
@@ -46,6 +50,7 @@ export default function App() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<EngineerDashboardPage />} />
                 <Route path="assigned" element={<MyAssignedTicketsPage />} />
+                <Route path="facilities" element={<EngineerFacilitiesOverviewPage />} />
               </Route>
             </Route>
 
@@ -55,6 +60,7 @@ export default function App() {
                 <Route path="dashboard" element={<AdminDashboardPage />} />
                 <Route path="incidents" element={<AllIncidentsPage />} />
                 <Route path="facilities" element={<FacilitiesPage />} />
+                <Route path="people" element={<PeoplePage />} />
               </Route>
             </Route>
           </Route>

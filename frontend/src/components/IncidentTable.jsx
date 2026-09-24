@@ -37,7 +37,12 @@ const EMPTY_FILTERS = {}
  * (e.g. status=OPEN for "My Open Tickets") and hide the corresponding
  * filter control.
  */
-export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, emptyMessage = 'No incidents found.' }) {
+export default function IncidentTable({
+  title,
+  baseFilters = EMPTY_FILTERS,
+  emptyMessage = 'No incidents found.',
+  splitByOwnership = false,
+}) {
   const { token } = useAuth()
   const { facilityById } = useFacilities()
 
@@ -78,6 +83,13 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
   const incidents = data?.incidents || []
   const total = data?.total ?? incidents.length
   const hasMore = incidents.length < total
+
+  // Backend already orders owned-by-me first (for FACILITY_ADMIN callers) -
+  // this just splits the one fetched/paginated array into two sections
+  // rather than re-sorting or re-fetching. No-op (empty arrays) for
+  // employee/engineer, whose incidents never carry `owned_by_me`.
+  const myIncidents = splitByOwnership ? incidents.filter((incident) => incident.owned_by_me) : []
+  const generalIncidents = splitByOwnership ? incidents.filter((incident) => !incident.owned_by_me) : incidents
 
   return (
     <div>
@@ -174,11 +186,27 @@ export default function IncidentTable({ title, baseFilters = EMPTY_FILTERS, empt
           {emptyMessage}
         </Paper>
       ) : (
-        <div className="incident-table__grid">
-          {incidents.map((incident) => (
-            <IncidentCard key={incident.id} incident={incident} facility={facilityById[incident.facility_id]} />
-          ))}
-        </div>
+        <>
+          {splitByOwnership && myIncidents.length > 0 && (
+            <>
+              <p className="incident-table__section-title">My Facility Incidents</p>
+              <div className="incident-table__grid">
+                {myIncidents.map((incident) => (
+                  <IncidentCard key={incident.id} incident={incident} facility={facilityById[incident.facility_id]} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {splitByOwnership && generalIncidents.length > 0 && (
+            <p className="incident-table__section-title">General Incidents</p>
+          )}
+          <div className="incident-table__grid">
+            {generalIncidents.map((incident) => (
+              <IncidentCard key={incident.id} incident={incident} facility={facilityById[incident.facility_id]} />
+            ))}
+          </div>
+        </>
       )}
 
       {!loading && incidents.length > 0 && (
@@ -205,4 +233,5 @@ IncidentTable.propTypes = {
   title: PropTypes.string.isRequired,
   baseFilters: PropTypes.object,
   emptyMessage: PropTypes.string,
+  splitByOwnership: PropTypes.bool,
 }

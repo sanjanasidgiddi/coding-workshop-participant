@@ -21,11 +21,16 @@ PG_CONN = None
 ALLOWED_STATUSES = ("OPEN", "IN_PROGRESS", "BLOCKED", "RESOLVED", "CLOSED")
 ALLOWED_PRIORITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 
-_COLUMNS = """
-    id, title, description, category, status, priority, employee_id,
-    assigned_engineer_id, facility_id, escalated, blocked_reason,
-    created_at, updated_at, resolved_at, closed_at
-"""
+_COLUMN_NAMES = (
+    "id", "title", "description", "category", "status", "priority", "employee_id",
+    "assigned_engineer_id", "facility_id", "escalated", "blocked_reason",
+    "created_at", "updated_at", "resolved_at", "closed_at",
+)
+_COLUMNS = ", ".join(_COLUMN_NAMES)
+# `i.`-prefixed variant for queries that JOIN facilities (which also has a
+# `created_at` column) - avoids an ambiguous-column error since `sort_by`
+# can be "created_at".
+_COLUMNS_I = ", ".join(f"i.{name}" for name in _COLUMN_NAMES)
 
 
 def get_connection(config: str):
@@ -91,6 +96,17 @@ def facility_exists(conn, facility_id: int) -> bool:
         return cur.fetchone() is not None
 
 
+def get_facility_owner(conn, facility_id: int) -> int | None:
+    """Looks up the admin who owns a facility's building (cross-service
+    query, same rationale as facility_exists/user_has_role - no FK, no
+    shared code between services). None if the facility doesn't exist, or
+    its building has no assigned owner (legacy data)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT created_by_user_id FROM facilities WHERE id = %s;", (facility_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
 def create_incident(conn, title: str, description: str | None, category: str | None,
                      priority: str, employee_id: int, facility_id: int) -> dict:
     """Inserts a new incident, owned by employee_id, and returns it."""
@@ -136,7 +152,7 @@ def _build_where(filters: dict, search: str | None) -> tuple[str, list]:
 
 
 def list_incidents(conn, filters: dict, search: str | None, sort_by: str, order: str,
-                    page: int, page_size: int) -> tuple[list, int]:
+                    page: int, page_size: int, viewer_user_id: int | None = None) -> tuple[list, int]:
     """
     Lists one page of incidents matching filters, with optional title/description
     search, and the total count of matching rows (for pagination metadata).
@@ -145,22 +161,53 @@ def list_incidents(conn, filters: dict, search: str | None, sort_by: str, order:
     employee_id, facility_id, category. sort_by/order must already be
     validated by the caller (they're interpolated directly since column/
     direction names can't be passed as query parameters).
+
+    `viewer_user_id` is only ever passed for FACILITY_ADMIN callers (see
+    handle_list): it joins facilities to compute `owned_by_me` per incident
+    and sorts owned-by-this-admin first, then by the caller's requested
+    sort_by/order within each group - so the admin "All Incidents" page can
+    split the same fetched page into "My Facility Incidents"/"General
+    Incidents" sections without a second query. `None` (employee/engineer)
+    runs the exact same query as before this feature existed.
     """
     where_sql, params = _build_where(filters, search)
 
+    if viewer_user_id is None:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT count(*) FROM incidents {where_sql};", params)
+            total = cur.fetchone()[0]
+
+            cur.execute(
+                f"""
+                SELECT {_COLUMNS} FROM incidents {where_sql}
+                ORDER BY {sort_by} {order}
+                LIMIT %s OFFSET %s;
+                """,
+                params + [page_size, (page - 1) * page_size],
+            )
+            items = [_row_to_dict(row) for row in cur.fetchall()]
+        return items, total
+
     with conn.cursor() as cur:
-        cur.execute(f"SELECT count(*) FROM incidents {where_sql};", params)
+        cur.execute(f"SELECT count(*) FROM incidents i {where_sql};", params)
         total = cur.fetchone()[0]
 
         cur.execute(
             f"""
-            SELECT {_COLUMNS} FROM incidents {where_sql}
-            ORDER BY {sort_by} {order}
+            SELECT {_COLUMNS_I}, (f.created_by_user_id = %s) AS owned_by_me
+            FROM incidents i
+            LEFT JOIN facilities f ON f.id = i.facility_id
+            {where_sql}
+            ORDER BY (f.created_by_user_id = %s) DESC NULLS LAST, i.{sort_by} {order}
             LIMIT %s OFFSET %s;
             """,
-            params + [page_size, (page - 1) * page_size],
+            [viewer_user_id, *params, viewer_user_id, page_size, (page - 1) * page_size],
         )
-        items = [_row_to_dict(row) for row in cur.fetchall()]
+        items = []
+        for row in cur.fetchall():
+            item = _row_to_dict(row[:-1])
+            item["owned_by_me"] = bool(row[-1])
+            items.append(item)
 
     return items, total
 
@@ -202,6 +249,9 @@ def get_incident_stats(conn, filters: dict) -> dict:
         )
         by_category = [{"category": row[0], "count": row[1]} for row in cur.fetchall()]
 
+        # Grouped by building only (never facility_id/floor/room), so every
+        # incident anywhere in a building - whole-building, a floor, or a
+        # specific room - rolls up into that one building's count.
         cur.execute(
             f"""
             SELECT f.building, count(*) AS count
@@ -213,14 +263,14 @@ def get_incident_stats(conn, filters: dict) -> dict:
             """,
             params,
         )
-        by_facility = [{"building": row[0], "count": row[1]} for row in cur.fetchall()]
+        by_building = [{"building": row[0], "count": row[1]} for row in cur.fetchall()]
 
     return {
         "total": totals["total"],
         "by_status": {status: totals[f"status_{status.lower()}"] for status in ALLOWED_STATUSES},
         "by_priority": {priority: totals[f"priority_{priority.lower()}"] for priority in ALLOWED_PRIORITIES},
         "by_category": by_category,
-        "by_facility": by_facility,
+        "by_building": by_building,
     }
 
 

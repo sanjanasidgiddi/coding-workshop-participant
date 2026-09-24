@@ -5,6 +5,7 @@ import './EngineerLayout.css'
 const TABS = [
   { value: '/engineer/dashboard', label: 'Dashboard' },
   { value: '/engineer/assigned', label: 'My Assigned Tickets' },
+  { value: '/engineer/facilities', label: 'Facilities' },
 ]
 
 export default function EngineerLayout() {

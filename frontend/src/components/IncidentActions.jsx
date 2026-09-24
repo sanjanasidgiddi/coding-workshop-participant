@@ -13,9 +13,12 @@ const ENGINEER_STATUS_OPTIONS = ['IN_PROGRESS', 'BLOCKED', 'RESOLVED']
 
 /**
  * Role-specific incident actions. Reaching this page at all already proves
- * the caller has the right role/ownership for it (the backend 403s
- * otherwise), so this only needs to branch on `role` - no separate
- * "am I the assigned engineer" check is needed.
+ * the caller has the right role/assignment for it (the backend 403s
+ * otherwise) - except FACILITY_ADMIN, which can view every incident but
+ * only mutate ones belonging to a building it owns (`incident.owned_by_me`,
+ * computed server-side). For a non-owned incident, admin mutation controls
+ * are not rendered at all (not just disabled) - the backend still 403s a
+ * direct API attempt regardless.
  */
 export default function IncidentActions({ incident, role, onUpdated }) {
   const { token } = useAuth()
@@ -26,9 +29,11 @@ export default function IncidentActions({ incident, role, onUpdated }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  const isOwnedAdmin = role === 'FACILITY_ADMIN' && incident.owned_by_me
+
   const { data: engineersData, loading: engineersLoading, error: engineersError } = useAsync(
-    () => (role === 'FACILITY_ADMIN' ? listEngineers(token) : Promise.resolve({ engineers: [] })),
-    [token, role],
+    () => (isOwnedAdmin ? listEngineers(token) : Promise.resolve({ engineers: [] })),
+    [token, isOwnedAdmin],
   )
   const engineers = engineersData?.engineers || []
 
@@ -43,6 +48,15 @@ export default function IncidentActions({ incident, role, onUpdated }) {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (role === 'FACILITY_ADMIN' && !isOwnedAdmin) {
+    return (
+      <Paper variant="outlined" className="incident-actions">
+        <p className="incident-actions__title">Admin Actions</p>
+        <p className="incident-actions__owner-note">Managed by another admin</p>
+      </Paper>
+    )
   }
 
   if (role === 'FACILITY_ADMIN') {

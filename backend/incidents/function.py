@@ -23,6 +23,7 @@ from postgres_service import (
     create_incident,
     facility_exists,
     get_connection,
+    get_facility_owner,
     get_incident,
     get_incident_stats,
     list_incidents,
@@ -218,7 +219,11 @@ def handle_list(conn, event: dict) -> dict:
 
     page, page_size = _parse_page(params)
 
-    incidents, total = list_incidents(conn, filters, search, sort_by, order, page, page_size)
+    # Only FACILITY_ADMIN gets ownership-aware ordering/flagging - employee/
+    # engineer list behavior is unchanged (viewer_user_id stays None, same
+    # SQL as before this feature existed).
+    viewer_user_id = int(claims["sub"]) if claims.get("role") == "FACILITY_ADMIN" else None
+    incidents, total = list_incidents(conn, filters, search, sort_by, order, page, page_size, viewer_user_id)
     total_pages = (total + page_size - 1) // page_size if total else 0
     return _response(200, {
         "incidents": incidents,
@@ -250,13 +255,32 @@ def _authorize_view(claims: dict, incident: dict) -> None:
     raise AuthError("You do not have access to this incident", 403)
 
 
+def _require_admin_owns_incident(conn, incident: dict, admin_user_id: int) -> None:
+    """Raises AuthError(403) unless `admin_user_id` owns the building of
+    `incident`'s facility. A facility-less incident, or one whose building
+    has no assigned owner (legacy data) or a different admin's owner, is
+    never mutable by any admin - frontend hiding of these controls is UX
+    only, this is the actual enforcement (mirrors the facilities-ownership
+    403s in the facilities service)."""
+    owner = get_facility_owner(conn, incident["facility_id"]) if incident["facility_id"] else None
+    if owner != admin_user_id:
+        raise AuthError("You do not manage the building this incident belongs to", 403)
+
+
 def handle_get(conn, event: dict, incident_id: int) -> dict:
-    """GET /incidents/{id} - fetches one incident, scoped by role."""
+    """GET /incidents/{id} - fetches one incident, scoped by role. For
+    FACILITY_ADMIN callers, also attaches `owned_by_me` so the detail page
+    knows whether to render admin mutation controls."""
     claims = _authenticate(event)
     incident = get_incident(conn, incident_id)
     if not incident:
         return _error(404, "Incident not found")
     _authorize_view(claims, incident)
+
+    if claims.get("role") == "FACILITY_ADMIN":
+        owner = get_facility_owner(conn, incident["facility_id"]) if incident["facility_id"] else None
+        incident = {**incident, "owned_by_me": owner == int(claims["sub"])}
+
     return _response(200, {"incident": incident})
 
 
@@ -282,6 +306,7 @@ def handle_update(conn, event: dict, incident_id: int) -> dict:
     if "priority" in data or "assigned_engineer_id" in data:
         if role != "FACILITY_ADMIN":
             raise AuthError("Only facility admins can update priority or assignment", 403)
+        _require_admin_owns_incident(conn, incident, user_id)
 
         if "priority" in data:
             priority = data["priority"].strip().upper()
@@ -306,6 +331,7 @@ def handle_update(conn, event: dict, incident_id: int) -> dict:
         if status == "CLOSED":
             if role != "FACILITY_ADMIN":
                 raise AuthError("Only facility admins can close incidents", 403)
+            _require_admin_owns_incident(conn, incident, user_id)
             fields["closed_at"] = datetime.now(timezone.utc)
         else:
             if role != "ENGINEER" or incident["assigned_engineer_id"] != user_id:

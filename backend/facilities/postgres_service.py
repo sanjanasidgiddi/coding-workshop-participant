@@ -14,6 +14,12 @@ from psycopg.errors import UniqueViolation
 PG_CONN = None
 
 
+class OwnershipError(Exception):
+    """Raised when an admin tries to manage a building they don't own -
+    including a legacy building with no assigned owner (NULL), which is
+    never inferred, only ever explicitly assigned."""
+
+
 def get_connection(config: str):
     """
     Returns a pooled psycopg connection, reused across warm Lambda invocations.
@@ -101,20 +107,47 @@ def ensure_schema(conn) -> None:
             SELECT DISTINCT building, floor, NULL FROM facilities WHERE floor IS NOT NULL
             ON CONFLICT (building, floor, room) DO NOTHING;
         """)
+        # Per-building admin ownership. Nullable and never backfilled for
+        # existing rows: a building's owner is only ever set explicitly (at
+        # creation, from the creating admin's JWT `sub`), never inferred -
+        # legacy buildings stay NULL ("unassigned") until a human assigns
+        # them. Employee/engineer reads are never scoped by this column.
+        cur.execute("ALTER TABLE facilities ADD COLUMN IF NOT EXISTS created_by_user_id BIGINT;")
 
 
-def create_facility(conn, building: str, floor: str | None, room: str | None) -> dict:
+def get_building_owner(conn, building: str) -> int | None:
+    """Returns the created_by_user_id shared by every row of `building`.
+    None means either the building doesn't exist, or (for legacy data
+    predating ownership tracking) its rows have no assigned owner."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT created_by_user_id FROM facilities WHERE building = %s;", (building,))
+        owners = [row[0] for row in cur.fetchall()]
+    return owners[0] if len(owners) == 1 else None
+
+
+def _require_owner(conn, building: str, admin_user_id: int) -> None:
+    """Raises OwnershipError unless `admin_user_id` owns every row of
+    `building` - including when the building has no assigned owner yet
+    (legacy data), which is never treated as "anyone may manage it"."""
+    if get_building_owner(conn, building) != admin_user_id:
+        raise OwnershipError(f"You do not own building '{building}'")
+
+
+def create_facility(conn, building: str, floor: str | None, room: str | None, created_by_user_id: int) -> dict:
     """Inserts a new facility and returns it. Raises ValueError if this exact
-    building/floor/room already exists (the unique constraint)."""
+    building/floor/room already exists (the unique constraint), or
+    OwnershipError if `building` already exists under a different admin."""
+    if building_exists(conn, building):
+        _require_owner(conn, building, created_by_user_id)
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO facilities (building, floor, room)
-                VALUES (%s, %s, %s)
+                INSERT INTO facilities (building, floor, room, created_by_user_id)
+                VALUES (%s, %s, %s, %s)
                 RETURNING id, building, floor, room, created_at;
                 """,
-                (building, floor, room),
+                (building, floor, room, created_by_user_id),
             )
             return _row_to_dict(cur.fetchone())
     except UniqueViolation:
@@ -207,9 +240,19 @@ def get_facility(conn, facility_id: int) -> dict | None:
         return _row_to_dict(row) if row else None
 
 
-def update_facility(conn, facility_id: int, building: str, floor: str | None, room: str | None) -> dict | None:
+def update_facility(
+    conn, facility_id: int, building: str, floor: str | None, room: str | None, admin_user_id: int
+) -> dict | None:
     """Updates a facility's fields, returning the updated row or None if not found.
-    Raises ValueError if the new building/floor/room collides with another row."""
+    Raises ValueError if the new building/floor/room collides with another row,
+    or OwnershipError if `admin_user_id` doesn't own the row's current
+    building (checked here so this row-level endpoint can't bypass the
+    ownership rules enforced on rename/delete-building)."""
+    existing = get_facility(conn, facility_id)
+    if existing is None:
+        return None
+    _require_owner(conn, existing["building"], admin_user_id)
+
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -227,16 +270,30 @@ def update_facility(conn, facility_id: int, building: str, floor: str | None, ro
         raise ValueError("A facility with this building/floor/room already exists")
 
 
-def delete_facility(conn, facility_id: int) -> bool:
-    """Deletes a facility by id, returning True if a row was deleted."""
+def delete_facility(conn, facility_id: int, admin_user_id: int) -> bool:
+    """Deletes a facility by id, returning True if a row was deleted, False
+    if it didn't exist. Raises OwnershipError if `admin_user_id` doesn't own
+    the row's building (same rationale as update_facility)."""
+    existing = get_facility(conn, facility_id)
+    if existing is None:
+        return False
+    _require_owner(conn, existing["building"], admin_user_id)
+
     with conn.cursor() as cur:
         cur.execute("DELETE FROM facilities WHERE id = %s;", (facility_id,))
         return cur.rowcount > 0
 
 
-def list_building_summaries(conn, page: int, page_size: int) -> tuple[list, int]:
+def list_building_summaries(conn, page: int, page_size: int, viewer_user_id: int) -> tuple[list, int]:
     """Aggregates distinct-floor and room counts per building, paginated
-    alphabetically - for the admin building-card view."""
+    owned-by-`viewer_user_id`-first then alphabetically - for the
+    building-card view. Every building is included for every caller
+    (visibility is global); each row also carries `owned_by_me`, whether
+    `viewer_user_id` is that building's owner, so a FACILITY_ADMIN caller
+    can see every building but the frontend knows which ones they may
+    manage (and can render "mine" before "everyone else's" straight from
+    this order, no client-side re-sort needed). Legacy buildings (no
+    assigned owner) are never owned_by_me for anyone."""
     with conn.cursor() as cur:
         cur.execute("SELECT count(DISTINCT building) FROM facilities;")
         total = cur.fetchone()[0]
@@ -245,15 +302,19 @@ def list_building_summaries(conn, page: int, page_size: int) -> tuple[list, int]
             """
             SELECT building,
                    count(DISTINCT floor) FILTER (WHERE floor IS NOT NULL) AS floor_count,
-                   count(*) FILTER (WHERE room IS NOT NULL) AS room_count
+                   count(*) FILTER (WHERE room IS NOT NULL) AS room_count,
+                   bool_or(created_by_user_id = %s) AS owned_by_me
             FROM facilities
             GROUP BY building
-            ORDER BY building
+            ORDER BY bool_or(created_by_user_id = %s) DESC NULLS LAST, building
             LIMIT %s OFFSET %s;
             """,
-            (page_size, (page - 1) * page_size),
+            (viewer_user_id, viewer_user_id, page_size, (page - 1) * page_size),
         )
-        buildings = [{"building": row[0], "floor_count": row[1], "room_count": row[2]} for row in cur.fetchall()]
+        buildings = [
+            {"building": row[0], "floor_count": row[1], "room_count": row[2], "owned_by_me": bool(row[3])}
+            for row in cur.fetchall()
+        ]
 
     return buildings, total
 
@@ -282,13 +343,16 @@ def count_incidents_for_building(conn, building: str) -> int:
         return cur.fetchone()[0]
 
 
-def rename_building(conn, old_building: str, new_building: str) -> int:
+def rename_building(conn, old_building: str, new_building: str, admin_user_id: int) -> int:
     """Renames every facility row for `old_building` to `new_building` in
-    one atomic UPDATE (floor/room values are untouched). Raises ValueError
-    if `old_building` doesn't exist, or if `new_building` is already a
-    different, existing building (renaming never merges two buildings)."""
+    one atomic UPDATE (floor/room/owner values are untouched). Raises
+    ValueError if `old_building` doesn't exist, or if `new_building` is
+    already a different, existing building (renaming never merges two
+    buildings); OwnershipError if `admin_user_id` doesn't own `old_building`
+    (including an unowned legacy building)."""
     if not building_exists(conn, old_building):
         raise ValueError(f"Building '{old_building}' does not exist")
+    _require_owner(conn, old_building, admin_user_id)
     if new_building != old_building and building_exists(conn, new_building):
         raise ValueError(f"A building named '{new_building}' already exists")
 
@@ -297,13 +361,16 @@ def rename_building(conn, old_building: str, new_building: str) -> int:
         return cur.rowcount
 
 
-def delete_building(conn, building: str) -> int:
+def delete_building(conn, building: str, admin_user_id: int) -> int:
     """Deletes every facility row for `building`. Raises ValueError if the
     building doesn't exist, or if any incident still references one of its
     facilities (checked first, so the delete fails cleanly instead of
-    leaving a dangling incidents.facility_id)."""
+    leaving a dangling incidents.facility_id); OwnershipError if
+    `admin_user_id` doesn't own `building` (including an unowned legacy
+    building)."""
     if not building_exists(conn, building):
         raise ValueError(f"Building '{building}' does not exist")
+    _require_owner(conn, building, admin_user_id)
 
     incident_count = count_incidents_for_building(conn, building)
     if incident_count > 0:
@@ -350,11 +417,15 @@ def building_has_floor(conn, building: str, floor: str) -> bool:
         return cur.fetchone() is not None
 
 
-def bulk_add_floors(conn, building: str, floor_count: int, rooms_per_floor: int) -> list:
+def bulk_add_floors(conn, building: str, floor_count: int, rooms_per_floor: int, created_by_user_id: int) -> list:
     """
     Adds `floor_count` new floors after the current highest numeric floor
     for `building` (starting at 1 if none exist yet), each with
-    `rooms_per_floor` rooms numbered `floor*100 + 1..rooms_per_floor`.
+    `rooms_per_floor` rooms numbered `floor*100 + 1..rooms_per_floor`. Every
+    newly inserted row is stamped with `created_by_user_id`; if `building`
+    is brand new, that admin becomes its owner. If `building` already
+    exists, raises OwnershipError unless `created_by_user_id` already owns
+    it (existing rows' ownership is left untouched either way).
 
     Also ensures the building-level (NULL, NULL) row and each new
     floor-level (floor, NULL) row exist, so building/floor/room are all
@@ -364,60 +435,69 @@ def bulk_add_floors(conn, building: str, floor_count: int, rooms_per_floor: int)
 
     Returns the rows actually inserted (excludes any that already existed).
     """
+    if building_exists(conn, building):
+        _require_owner(conn, building, created_by_user_id)
+
     start = get_max_floor_number(conn, building) + 1
     created = []
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO facilities (building, floor, room)
-                VALUES (%s, NULL, NULL)
+                INSERT INTO facilities (building, floor, room, created_by_user_id)
+                VALUES (%s, NULL, NULL, %s)
                 ON CONFLICT (building, floor, room) DO NOTHING
                 RETURNING id, building, floor, room, created_at;
                 """,
-                (building,),
+                (building, created_by_user_id),
             )
             created.extend(cur.fetchall())
 
             if floor_count > 0:
                 cur.execute(
                     """
-                    INSERT INTO facilities (building, floor, room)
-                    SELECT %s, f::text, NULL
+                    INSERT INTO facilities (building, floor, room, created_by_user_id)
+                    SELECT %s, f::text, NULL, %s
                     FROM generate_series(%s::int, %s::int) AS f
                     ON CONFLICT (building, floor, room) DO NOTHING
                     RETURNING id, building, floor, room, created_at;
                     """,
-                    (building, start, start + floor_count - 1),
+                    (building, created_by_user_id, start, start + floor_count - 1),
                 )
                 created.extend(cur.fetchall())
 
                 if rooms_per_floor > 0:
                     cur.execute(
                         """
-                        INSERT INTO facilities (building, floor, room)
-                        SELECT %s, f::text, (f * 100 + r)::text
+                        INSERT INTO facilities (building, floor, room, created_by_user_id)
+                        SELECT %s, f::text, (f * 100 + r)::text, %s
                         FROM generate_series(%s::int, %s::int) AS f
                         CROSS JOIN generate_series(1, %s::int) AS r
                         ON CONFLICT (building, floor, room) DO NOTHING
                         RETURNING id, building, floor, room, created_at;
                         """,
-                        (building, start, start + floor_count - 1, rooms_per_floor),
+                        (building, created_by_user_id, start, start + floor_count - 1, rooms_per_floor),
                     )
                     created.extend(cur.fetchall())
 
     return [_row_to_dict(row) for row in created]
 
 
-def bulk_add_rooms(conn, building: str, floor: str, room_count: int) -> list:
+def bulk_add_rooms(conn, building: str, floor: str, room_count: int, created_by_user_id: int) -> list:
     """
     Adds `room_count` new rooms to an existing `floor` of `building`, after
-    the current highest room index used there. Also ensures the
-    building-level and floor-level bare rows exist. Idempotent, like
-    `bulk_add_floors`.
+    the current highest room index used there. Every newly inserted row is
+    stamped with `created_by_user_id`; raises OwnershipError unless that
+    admin already owns `building` (this function is only ever called for a
+    floor that already exists, so the building always already exists too).
+    Also ensures the building-level and floor-level bare rows exist.
+    Idempotent, like `bulk_add_floors`.
 
     Returns the rows actually inserted (excludes any that already existed).
     """
+    if building_exists(conn, building):
+        _require_owner(conn, building, created_by_user_id)
+
     floor_number = int(floor)
     start = get_max_room_index(conn, building, floor_number) + 1
     created = []
@@ -425,36 +505,36 @@ def bulk_add_rooms(conn, building: str, floor: str, room_count: int) -> list:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO facilities (building, floor, room)
-                VALUES (%s, NULL, NULL)
+                INSERT INTO facilities (building, floor, room, created_by_user_id)
+                VALUES (%s, NULL, NULL, %s)
                 ON CONFLICT (building, floor, room) DO NOTHING
                 RETURNING id, building, floor, room, created_at;
                 """,
-                (building,),
+                (building, created_by_user_id),
             )
             created.extend(cur.fetchall())
 
             cur.execute(
                 """
-                INSERT INTO facilities (building, floor, room)
-                VALUES (%s, %s, NULL)
+                INSERT INTO facilities (building, floor, room, created_by_user_id)
+                VALUES (%s, %s, NULL, %s)
                 ON CONFLICT (building, floor, room) DO NOTHING
                 RETURNING id, building, floor, room, created_at;
                 """,
-                (building, floor),
+                (building, floor, created_by_user_id),
             )
             created.extend(cur.fetchall())
 
             if room_count > 0:
                 cur.execute(
                     """
-                    INSERT INTO facilities (building, floor, room)
-                    SELECT %s, %s, (%s::int * 100 + r)::text
+                    INSERT INTO facilities (building, floor, room, created_by_user_id)
+                    SELECT %s, %s, (%s::int * 100 + r)::text, %s
                     FROM generate_series(%s::int, %s::int) AS r
                     ON CONFLICT (building, floor, room) DO NOTHING
                     RETURNING id, building, floor, room, created_at;
                     """,
-                    (building, floor, floor_number, start, start + room_count - 1),
+                    (building, floor, floor_number, created_by_user_id, start, start + room_count - 1),
                 )
                 created.extend(cur.fetchall())
 

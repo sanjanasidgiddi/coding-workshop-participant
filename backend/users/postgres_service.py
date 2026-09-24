@@ -105,16 +105,20 @@ def get_user_by_email(conn, email: str) -> dict | None:
         }
 
 
-def list_engineers(conn) -> list:
-    """Fetches all users with role ENGINEER, for admin-only assignment UI."""
+def list_engineers(conn, roles: tuple[str, ...] = ("ENGINEER",)) -> list:
+    """Fetches all users whose role is in `roles` (every field but
+    password_hash). Defaults to ENGINEER only, for the admin-only
+    incident-assignment dropdown; the admin People directory reuses this
+    same function/endpoint with roles=(EMPLOYEE, ENGINEER)."""
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT id, name, email, role, active, created_at
             FROM users
-            WHERE role = 'ENGINEER'
-            ORDER BY name;
-            """
+            WHERE role = ANY(%s)
+            ORDER BY role, name;
+            """,
+            (list(roles),),
         )
         return [
             {

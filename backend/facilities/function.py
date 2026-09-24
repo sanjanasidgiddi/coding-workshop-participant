@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "dep
 
 from auth import AuthError, decode_token, get_bearer_token, require_role
 from postgres_service import (
+    OwnershipError,
     bulk_add_floors,
     bulk_add_rooms,
     building_has_floor,
@@ -110,8 +111,11 @@ def _authenticate(event: dict) -> dict:
 
 
 def handle_create(conn, event: dict) -> dict:
-    """POST /facilities - creates a facility (FACILITY_ADMIN only). Only building is required; floor and room are optional."""
-    require_role(_authenticate(event), "FACILITY_ADMIN")
+    """POST /facilities - creates a facility (FACILITY_ADMIN only). Only
+    building is required; floor and room are optional. Ownership is always
+    taken from the caller's JWT `sub`, never from the request body."""
+    claims = _authenticate(event)
+    require_role(claims, "FACILITY_ADMIN")
 
     data = _parse_body(event)
     _require_fields(data, "building")
@@ -120,6 +124,7 @@ def handle_create(conn, event: dict) -> dict:
         data["building"].strip(),
         (data.get("floor") or "").strip() or None,
         (data.get("room") or "").strip() or None,
+        int(claims["sub"]),
     )
     return _response(201, {"facility": facility})
 
@@ -189,12 +194,16 @@ def _parse_page(params: dict, default_page_size: int) -> tuple[int, int]:
 
 
 def handle_summary(conn, event: dict) -> dict:
-    """GET /facilities/summary?page=&page_size= - paginated per-building floor/room counts (any authenticated user)."""
-    _authenticate(event)
+    """GET /facilities/summary?page=&page_size= - paginated per-building
+    floor/room counts (any authenticated user). Every building is visible
+    to every caller; each one also carries `owned_by_me` (relative to the
+    caller), which the FACILITY_ADMIN Facilities page uses to decide which
+    buildings it may show Update/Delete controls for."""
+    claims = _authenticate(event)
     params = event.get("queryStringParameters") or {}
     page, page_size = _parse_page(params, _DEFAULT_SUMMARY_PAGE_SIZE)
 
-    buildings, total = list_building_summaries(conn, page, page_size)
+    buildings, total = list_building_summaries(conn, page, page_size, int(claims["sub"]))
     total_pages = (total + page_size - 1) // page_size if total else 0
     return _response(200, {
         "buildings": buildings,
@@ -206,8 +215,10 @@ def handle_summary(conn, event: dict) -> dict:
 
 
 def handle_rename_building(conn, event: dict) -> dict:
-    """PUT /facilities/building - renames every row for one building (FACILITY_ADMIN only)."""
-    require_role(_authenticate(event), "FACILITY_ADMIN")
+    """PUT /facilities/building - renames every row for one building
+    (FACILITY_ADMIN only, and only if the caller owns it - 403 otherwise)."""
+    claims = _authenticate(event)
+    require_role(claims, "FACILITY_ADMIN")
 
     data = _parse_body(event)
     _require_fields(data, "building", "new_building")
@@ -216,19 +227,22 @@ def handle_rename_building(conn, event: dict) -> dict:
     if not new_building:
         raise ValueError("new_building must not be blank")
 
-    updated_count = rename_building(conn, old_building, new_building)
+    updated_count = rename_building(conn, old_building, new_building, int(claims["sub"]))
     return _response(200, {"building": new_building, "updated_count": updated_count})
 
 
 def handle_delete_building(conn, event: dict) -> dict:
-    """DELETE /facilities/building?building=X - deletes every row for one building (FACILITY_ADMIN only)."""
-    require_role(_authenticate(event), "FACILITY_ADMIN")
+    """DELETE /facilities/building?building=X - deletes every row for one
+    building (FACILITY_ADMIN only, and only if the caller owns it - 403
+    otherwise)."""
+    claims = _authenticate(event)
+    require_role(claims, "FACILITY_ADMIN")
 
     building = _query_param(event, "building")
     if not building:
         raise ValueError("Missing required query parameter: building")
 
-    deleted_count = delete_building(conn, building)
+    deleted_count = delete_building(conn, building, int(claims["sub"]))
     return _response(200, {"building": building, "deleted_count": deleted_count})
 
 
@@ -242,8 +256,13 @@ def handle_get(conn, event: dict, facility_id: int) -> dict:
 
 
 def handle_update(conn, event: dict, facility_id: int) -> dict:
-    """PUT /facilities/{id} - updates a facility (FACILITY_ADMIN only). Only building is required; floor and room are optional."""
-    require_role(_authenticate(event), "FACILITY_ADMIN")
+    """PUT /facilities/{id} - updates a facility (FACILITY_ADMIN only). Only
+    building is required; floor and room are optional. Ownership of the
+    row's current building is checked server-side (403 on mismatch), so
+    this row-level endpoint can't bypass the building-level ownership
+    rules."""
+    claims = _authenticate(event)
+    require_role(claims, "FACILITY_ADMIN")
 
     data = _parse_body(event)
     _require_fields(data, "building")
@@ -253,6 +272,7 @@ def handle_update(conn, event: dict, facility_id: int) -> dict:
         data["building"].strip(),
         (data.get("floor") or "").strip() or None,
         (data.get("room") or "").strip() or None,
+        int(claims["sub"]),
     )
     if not facility:
         return _error(404, "Facility not found")
@@ -287,8 +307,14 @@ def handle_bulk(conn, event: dict) -> dict:
 
     - {"building": "...", "floor": "3", "room_count": M}
       Adds M new rooms to an existing floor, after its current highest room.
+
+    Every newly created row is stamped with the caller's JWT `sub`. If
+    `building` already exists, the caller must already own it (403
+    otherwise, including an unowned legacy building).
     """
-    require_role(_authenticate(event), "FACILITY_ADMIN")
+    claims = _authenticate(event)
+    require_role(claims, "FACILITY_ADMIN")
+    admin_user_id = int(claims["sub"])
 
     data = _parse_body(event)
     _require_fields(data, "building")
@@ -311,7 +337,7 @@ def handle_bulk(conn, event: dict) -> dict:
         if current_max_room + room_count > _MAX_ROOMS_PER_FLOOR:
             raise ValueError(f"Adding {room_count} room(s) would exceed the maximum of {_MAX_ROOMS_PER_FLOOR} rooms per floor")
 
-        created = bulk_add_rooms(conn, building, floor, room_count)
+        created = bulk_add_rooms(conn, building, floor, room_count, admin_user_id)
         requested_count = 2 + room_count  # building-level + floor-level bare rows, plus the new rooms
     else:
         floor_count = _nonneg_int(data, "floor_count", _MAX_FLOORS_PER_BUILDING)
@@ -323,7 +349,7 @@ def handle_bulk(conn, event: dict) -> dict:
         if current_max_floor + floor_count > _MAX_FLOORS_PER_BUILDING:
             raise ValueError(f"Adding {floor_count} floor(s) would exceed the maximum of {_MAX_FLOORS_PER_BUILDING} floors per building")
 
-        created = bulk_add_floors(conn, building, floor_count, rooms_per_floor)
+        created = bulk_add_floors(conn, building, floor_count, rooms_per_floor, admin_user_id)
         requested_count = 1 + floor_count + (floor_count * rooms_per_floor)  # building row + floor rows + room rows
 
     return _response(201, {
@@ -335,10 +361,13 @@ def handle_bulk(conn, event: dict) -> dict:
 
 
 def handle_delete(conn, event: dict, facility_id: int) -> dict:
-    """DELETE /facilities/{id} - deletes a facility (FACILITY_ADMIN only)."""
-    require_role(_authenticate(event), "FACILITY_ADMIN")
+    """DELETE /facilities/{id} - deletes a facility (FACILITY_ADMIN only).
+    Ownership of the row's current building is checked server-side (403 on
+    mismatch), same rationale as handle_update."""
+    claims = _authenticate(event)
+    require_role(claims, "FACILITY_ADMIN")
 
-    if not delete_facility(conn, facility_id):
+    if not delete_facility(conn, facility_id, int(claims["sub"])):
         return _error(404, "Facility not found")
     return _response(204)
 
@@ -406,6 +435,8 @@ def handler(event=None, context=None):
 
     except AuthError as e:
         return _error(e.status_code, str(e))
+    except OwnershipError as e:
+        return _error(403, str(e))
     except ValueError as e:
         return _error(400, str(e))
     except Exception as e:

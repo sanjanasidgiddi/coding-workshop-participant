@@ -7,6 +7,7 @@ const TABS = [
   { value: '/employee/open', label: 'My Open Tickets' },
   { value: '/employee/tickets', label: 'All My Tickets' },
   { value: '/employee/new', label: 'Create Incident' },
+  { value: '/employee/facilities', label: 'Facilities' },
 ]
 
 export default function EmployeeLayout() {

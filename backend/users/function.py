@@ -150,10 +150,24 @@ def handle_me(conn, event: dict) -> dict:
 
 
 def handle_engineers(conn, event: dict) -> dict:
-    """GET /engineers - lists all ENGINEER users (FACILITY_ADMIN only)."""
+    """GET /engineers - lists users (FACILITY_ADMIN only). Defaults to
+    ENGINEER only, for the incident-assignment dropdown; pass
+    ?roles=EMPLOYEE,ENGINEER to widen it (used by the People directory) -
+    reuses the same endpoint instead of adding a new one."""
     claims = decode_token(get_bearer_token(event))
     require_role(claims, "FACILITY_ADMIN")
-    return _response(200, {"engineers": list_engineers(conn)})
+
+    params = event.get("queryStringParameters") or {}
+    roles_param = (params.get("roles") or "").strip()
+    if roles_param:
+        roles = tuple(role.strip().upper() for role in roles_param.split(",") if role.strip())
+        invalid = [role for role in roles if role not in ALLOWED_ROLES]
+        if invalid:
+            raise ValueError(f"Invalid role(s): {', '.join(invalid)}")
+    else:
+        roles = ("ENGINEER",)
+
+    return _response(200, {"engineers": list_engineers(conn, roles)})
 
 
 def handler(event=None, context=None):
@@ -164,7 +178,8 @@ def handler(event=None, context=None):
         POST /register   - create a new user
         POST /login       - authenticate and receive a signed access token
         GET  /me          - retrieve the currently authenticated user
-        GET  /engineers   - list ENGINEER users (FACILITY_ADMIN only)
+        GET  /engineers   - list users (FACILITY_ADMIN only), defaults to
+                             ENGINEER only; ?roles=EMPLOYEE,ENGINEER widens it
 
     Args:
         event (dict, optional): The Lambda event.

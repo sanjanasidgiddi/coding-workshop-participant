@@ -9,6 +9,10 @@ import StatCard from './StatCard'
 import DistributionChart from './DistributionChart'
 import './DashboardStats.css'
 
+// Reuses the theme's dark text color - distinct from semanticColorHex.default
+// (used by OPEN) without introducing a brand-new arbitrary color.
+const CLOSED_CHART_COLOR = '#2B2830'
+
 /**
  * Role-aware incident dashboard: stat cards + distribution charts, all
  * driven by one role-scoped GET /incidents/stats call (the backend already
@@ -44,7 +48,7 @@ export default function DashboardStats({ totalLabel, variant = 'employee' }) {
   const byStatus = stats?.by_status || {}
   const byPriority = stats?.by_priority || {}
   const byCategory = stats?.by_category || []
-  const byFacility = stats?.by_facility || []
+  const byBuilding = stats?.by_building || []
 
   const cards = [
     { label: totalLabel, value: stats?.total ?? 0, colorKey: 'default' },
@@ -62,7 +66,10 @@ export default function DashboardStats({ totalLabel, variant = 'employee' }) {
     .map(([status, value]) => ({
       label: formatEnumLabel(status),
       value,
-      color: semanticColorHex[statusColors[status]] || semanticColorHex.default,
+      // CLOSED shares OPEN's "default" semantic slot elsewhere (chips,
+      // stat cards), which makes them indistinguishable as pie slices -
+      // give CLOSED its own tone for this chart only.
+      color: status === 'CLOSED' ? CLOSED_CHART_COLOR : semanticColorHex[statusColors[status]] || semanticColorHex.default,
     }))
 
   const priorityData = Object.entries(byPriority)
@@ -73,14 +80,9 @@ export default function DashboardStats({ totalLabel, variant = 'employee' }) {
       color: semanticColorHex[priorityColors[priority]] || semanticColorHex.default,
     }))
 
-  // Admins get one more distribution: whichever of category/building has
-  // more to show, so the extra chart isn't just empty for this demo data.
-  const extraChart =
-    variant === 'admin' && (byCategory.length > 0 || byFacility.length > 0)
-      ? byCategory.length >= byFacility.length
-        ? { title: 'By Category', data: byCategory.map((c) => ({ label: c.category, value: c.count })) }
-        : { title: 'By Building', data: byFacility.map((f) => ({ label: f.building, value: f.count })) }
-      : null
+  // Admins get two more distributions: by category and by building.
+  const categoryData = byCategory.map((c) => ({ label: c.category, value: c.count }))
+  const buildingData = byBuilding.map((b) => ({ label: b.building, value: b.count }))
 
   return (
     <div className="dashboard-stats">
@@ -94,7 +96,12 @@ export default function DashboardStats({ totalLabel, variant = 'employee' }) {
       <div className="dashboard-stats__charts">
         <DistributionChart title="By Status" data={statusData} variant="pie" />
         <DistributionChart title="By Priority" data={priorityData} variant="pie" />
-        {extraChart && <DistributionChart title={extraChart.title} data={extraChart.data} variant="bar" />}
+        {variant === 'admin' && categoryData.length > 0 && (
+          <DistributionChart title="By Category" data={categoryData} variant="bar" />
+        )}
+        {variant === 'admin' && (
+          <DistributionChart title="Incidents by Building" data={buildingData} variant="pie" />
+        )}
       </div>
     </div>
   )
